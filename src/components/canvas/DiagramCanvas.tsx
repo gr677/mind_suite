@@ -72,6 +72,18 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [initialChildPositions, setInitialChildPositions] = useState<Record<string, { x: number; y: number }>>({});
 
+  // Node Resizing state
+  const [resizing, setResizing] = useState<{
+    nodeId: string;
+    direction: 'se' | 'e' | 's' | 'sw' | 'ne' | 'nw' | 'n' | 'w';
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    initialWidth: number;
+    initialHeight: number;
+  } | null>(null);
+
   // Edge drawing state
   const [connectingFrom, setConnectingFrom] = useState<{
     nodeId: string;
@@ -80,6 +92,28 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const [currentMousePos, setCurrentMousePos] = useState({ x: 0, y: 0 });
 
   const isReadOnly = userRole === 'viewer';
+
+  // Start Resizing a node from handles
+  const handleStartResize = (
+    nodeId: string,
+    direction: 'se' | 'e' | 's' | 'sw' | 'ne' | 'nw' | 'n' | 'w',
+    e: React.MouseEvent
+  ) => {
+    if (isReadOnly) return;
+    const targetNode = nodes.find(n => n.id === nodeId);
+    if (!targetNode) return;
+    const canvasCoords = screenToCanvasCoords(e.clientX, e.clientY);
+    setResizing({
+      nodeId,
+      direction,
+      startX: canvasCoords.x,
+      startY: canvasCoords.y,
+      initialX: targetNode.x,
+      initialY: targetNode.y,
+      initialWidth: targetNode.width,
+      initialHeight: targetNode.height,
+    });
+  };
 
   // Handle Canvas Zooming via wheel
   const handleWheel = (e: React.WheelEvent) => {
@@ -176,9 +210,9 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     }
   };
 
-  // Window-level mouse move and mouse up listeners while dragging or panning
+  // Window-level mouse move and mouse up listeners while dragging, resizing, or panning
   useEffect(() => {
-    if (!isPanning && !draggingNodeId) return;
+    if (!isPanning && !draggingNodeId && !resizing) return;
 
     const onWindowMouseMove = (e: MouseEvent) => {
       const canvasCoords = screenToCanvasCoords(e.clientX, e.clientY);
@@ -192,6 +226,78 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         return;
       }
 
+      // Handle Node Resizing
+      if (resizing && !isReadOnly) {
+        const nodeIndex = nodes.findIndex(n => n.id === resizing.nodeId);
+        if (nodeIndex !== -1) {
+          const deltaX = canvasCoords.x - resizing.startX;
+          const deltaY = canvasCoords.y - resizing.startY;
+          let newX = resizing.initialX;
+          let newY = resizing.initialY;
+          let newWidth = resizing.initialWidth;
+          let newHeight = resizing.initialHeight;
+
+          const minWidth = 80;
+          const minHeight = 40;
+
+          switch (resizing.direction) {
+            case 'se':
+              newWidth = Math.max(minWidth, resizing.initialWidth + deltaX);
+              newHeight = Math.max(minHeight, resizing.initialHeight + deltaY);
+              break;
+            case 'e':
+              newWidth = Math.max(minWidth, resizing.initialWidth + deltaX);
+              break;
+            case 's':
+              newHeight = Math.max(minHeight, resizing.initialHeight + deltaY);
+              break;
+            case 'sw':
+              newWidth = Math.max(minWidth, resizing.initialWidth - deltaX);
+              newX = resizing.initialX + (resizing.initialWidth - newWidth);
+              newHeight = Math.max(minHeight, resizing.initialHeight + deltaY);
+              break;
+            case 'ne':
+              newWidth = Math.max(minWidth, resizing.initialWidth + deltaX);
+              newHeight = Math.max(minHeight, resizing.initialHeight - deltaY);
+              newY = resizing.initialY + (resizing.initialHeight - newHeight);
+              break;
+            case 'nw':
+              newWidth = Math.max(minWidth, resizing.initialWidth - deltaX);
+              newX = resizing.initialX + (resizing.initialWidth - newWidth);
+              newHeight = Math.max(minHeight, resizing.initialHeight - deltaY);
+              newY = resizing.initialY + (resizing.initialHeight - newHeight);
+              break;
+            case 'n':
+              newHeight = Math.max(minHeight, resizing.initialHeight - deltaY);
+              newY = resizing.initialY + (resizing.initialHeight - newHeight);
+              break;
+            case 'w':
+              newWidth = Math.max(minWidth, resizing.initialWidth - deltaX);
+              newX = resizing.initialX + (resizing.initialWidth - newWidth);
+              break;
+          }
+
+          if (gridSnap) {
+            newWidth = Math.round(newWidth / 20) * 20;
+            newHeight = Math.round(newHeight / 20) * 20;
+            newX = Math.round(newX / 20) * 20;
+            newY = Math.round(newY / 20) * 20;
+          }
+
+          const updatedNodes = [...nodes];
+          updatedNodes[nodeIndex] = {
+            ...updatedNodes[nodeIndex],
+            x: newX,
+            y: newY,
+            width: newWidth,
+            height: newHeight,
+          };
+          onUpdateNodes(updatedNodes);
+        }
+        return;
+      }
+
+      // Handle Node Dragging
       if (draggingNodeId && !isReadOnly) {
         const nodeIndex = nodes.findIndex(n => n.id === draggingNodeId);
         if (nodeIndex !== -1) {
@@ -233,6 +339,10 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         setIsPanning(false);
       }
 
+      if (resizing) {
+        setResizing(null);
+      }
+
       if (draggingNodeId && !isReadOnly) {
         const movedNode = nodes.find(n => n.id === draggingNodeId);
         if (movedNode && !movedNode.isGroup) {
@@ -268,6 +378,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     panStart,
     draggingNodeId,
     dragOffset,
+    resizing,
     gridSnap,
     isReadOnly,
     nodes,
@@ -536,6 +647,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
             isDragging={draggingNodeId === node.id}
             collaborators={collaborators}
             onNodeMouseDown={handleNodeMouseDown}
+            onStartResize={handleStartResize}
             onDrillDown={onDrillDown}
             onStartConnection={(nodeId, anchor) => {
               setConnectingFrom({ nodeId, anchor });
@@ -546,7 +658,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           />
         ))}
 
-        {/* Real-Time Live Collaborator Cursors */}
+        {/* Real-Time Live Collaborator Cursors (Hidden for now as requested) */}
+        {/*
         {collaborators.map(c => {
           if (!c.cursorPosition) return null;
           return (
@@ -573,6 +686,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
             </div>
           );
         })}
+        */}
       </div>
 
       {/* Bottom-Right Minimap Indicator */}

@@ -29,6 +29,11 @@ interface NodeRendererProps {
   isDragging: boolean;
   collaborators: Collaborator[];
   onNodeMouseDown?: (nodeId: string, e: React.MouseEvent) => void;
+  onStartResize?: (
+    nodeId: string,
+    direction: 'se' | 'e' | 's' | 'sw' | 'ne' | 'nw' | 'n' | 'w',
+    e: React.MouseEvent
+  ) => void;
   onDrillDown?: (pageId: string) => void;
   onStartConnection?: (nodeId: string, anchor: 'top' | 'right' | 'bottom' | 'left', e: React.MouseEvent) => void;
   onOpenDoc?: (node: DiagramNode) => void;
@@ -42,6 +47,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   isDragging,
   collaborators,
   onNodeMouseDown,
+  onStartResize,
   onDrillDown,
   onStartConnection,
   onOpenDoc,
@@ -81,28 +87,50 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
                 <Table className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <span className="truncate">{node.data?.tableName || node.label}</span>
               </div>
-              <span className="text-[10px] text-sky-400/80 font-mono">TABLE</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-sky-400/80 font-mono">TABLE</span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-sky-900/60 text-sky-300 font-mono">
+                  {fields.length} cols
+                </span>
+              </div>
             </div>
             {/* Fields list */}
             <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 p-1">
-              {fields.map((f: any, idx: number) => (
-                <div key={idx} className="flex items-center justify-between px-2 py-1 hover:bg-slate-800/40 font-mono text-[11px]">
-                  <div className="flex items-center gap-1.5 truncate">
-                    {f.isPk && (
-                      <span className="px-1 py-0.2 bg-amber-500/20 text-amber-300 text-[9px] font-bold rounded">
-                        PK
-                      </span>
-                    )}
-                    {f.isFk && (
-                      <span className="px-1 py-0.2 bg-purple-500/20 text-purple-300 text-[9px] font-bold rounded">
-                        FK
-                      </span>
-                    )}
-                    <span className="text-slate-200 truncate">{f.name}</span>
-                  </div>
-                  <span className="text-slate-400 text-[10px] shrink-0 ml-2">{f.type}</span>
+              {fields.length === 0 ? (
+                <div className="p-2 text-center text-[10px] text-slate-500 italic">
+                  No columns defined. Select node to add schema in Inspector.
                 </div>
-              ))}
+              ) : (
+                fields.map((f: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between px-2 py-1 hover:bg-slate-800/60 font-mono text-[11px] rounded transition-colors group/col"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      {f.isPk && (
+                        <span className="px-1 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold rounded">
+                          PK
+                        </span>
+                      )}
+                      {f.isFk && (
+                        <span className="px-1 py-0.2 bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[9px] font-bold rounded">
+                          FK
+                        </span>
+                      )}
+                      {f.isUnique && (
+                        <span className="px-1 py-0.2 bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[9px] font-bold rounded">
+                          UQ
+                        </span>
+                      )}
+                      <span className="text-slate-200 truncate">{f.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 shrink-0 ml-2">
+                      <span>{f.type}</span>
+                      {f.isNullable && <span className="text-slate-500 text-[8px] italic">null</span>}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         );
@@ -485,48 +513,6 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         }
       }}
     >
-      {/* Real-time collaborator active badge on node */}
-      {activeCollaborator && (
-        <div
-          className="absolute -top-6 left-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-white font-medium shadow-md z-30 animate-pulse pointer-events-none"
-          style={{ backgroundColor: activeCollaborator.color }}
-        >
-          <span>{activeCollaborator.avatar}</span>
-          <span>{activeCollaborator.name} is editing</span>
-        </div>
-      )}
-
-      {/* Node Indicators (Sticky Notes & Documentation Pills) */}
-      <div className="absolute -top-3 right-1 flex items-center gap-1 z-30">
-        {node.documentation && (
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onOpenDoc?.(node);
-            }}
-            className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold uppercase tracking-wider shadow cursor-pointer ${
-              node.documentation.status === 'approved'
-                ? 'bg-emerald-500 text-white'
-                : node.documentation.status === 'in-review'
-                ? 'bg-amber-500 text-white'
-                : 'bg-slate-700 text-slate-200'
-            }`}
-            title="Inspect node documentation & specifications"
-          >
-            DOC
-          </button>
-        )}
-        {node.stickyNotes && node.stickyNotes.length > 0 && (
-          <div
-            className="flex items-center gap-0.5 px-1.5 py-0.2 bg-amber-400 text-amber-950 rounded-full text-[9px] font-bold shadow"
-            title={`${node.stickyNotes.length} sticky notes attached`}
-          >
-            <StickyIcon className="w-2.5 h-2.5" />
-            {node.stickyNotes.length}
-          </div>
-        )}
-      </div>
-
       {/* Connection Anchor Handles */}
       {renderAnchor('top', '-top-1.5 left-1/2 -translate-x-1/2')}
       {renderAnchor('right', '-right-1.5 top-1/2 -translate-y-1/2')}
@@ -535,6 +521,79 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       {/* Render Node Body */}
       {renderNodeBody()}
+
+      {/* Interactive Resize Handles (Rendered when node is selected) */}
+      {isSelected && !isReadOnly && (
+        <>
+          {/* Corner Handles */}
+          <div
+            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nwse-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'nw', e);
+            }}
+            title="Resize node"
+          />
+          <div
+            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nesw-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'ne', e);
+            }}
+            title="Resize node"
+          />
+          <div
+            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nesw-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'sw', e);
+            }}
+            title="Resize node"
+          />
+          <div
+            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nwse-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'se', e);
+            }}
+            title="Resize node"
+          />
+
+          {/* Edge Handles */}
+          <div
+            className="absolute -top-1 left-1/2 -translate-x-1/2 w-4 h-2 bg-white border border-blue-500 rounded-full shadow-md cursor-ns-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'n', e);
+            }}
+            title="Resize height"
+          />
+          <div
+            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-2 bg-white border border-blue-500 rounded-full shadow-md cursor-ns-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 's', e);
+            }}
+            title="Resize height"
+          />
+          <div
+            className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-4 bg-white border border-blue-500 rounded-full shadow-md cursor-ew-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'w', e);
+            }}
+            title="Resize width"
+          />
+          <div
+            className="absolute top-1/2 -right-1 -translate-y-1/2 w-2 h-4 bg-white border border-blue-500 rounded-full shadow-md cursor-ew-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            onMouseDown={e => {
+              e.stopPropagation();
+              onStartResize?.(node.id, 'e', e);
+            }}
+            title="Resize width"
+          />
+        </>
+      )}
 
       {/* Inline Label Editor (on Double Click) */}
       {isEditingLabel && (

@@ -20,6 +20,11 @@ import {
   Send,
   X,
   Code,
+  ArrowUp,
+  ArrowDown,
+  Database,
+  Cpu,
+  FolderOpen,
 } from 'lucide-react';
 
 interface NodeInspectorProps {
@@ -232,34 +237,118 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Width (px)</label>
-              <input
-                type="number"
-                disabled={isReadOnly}
-                value={selectedNode.width}
-                onChange={e => onUpdateNode({ ...selectedNode, width: parseInt(e.target.value, 10) || 50 })}
-                className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-slate-100 disabled:opacity-50"
-              />
+          {/* Dimensions & Quick Resize Presets */}
+          <div>
+            <div className="grid grid-cols-2 gap-2 mb-1.5">
+              <div>
+                <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Width (px)</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    disabled={isReadOnly}
+                    value={selectedNode.width}
+                    onChange={e => onUpdateNode({ ...selectedNode, width: Math.max(60, parseInt(e.target.value, 10) || 60) })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-slate-100 disabled:opacity-50"
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      disabled={isReadOnly}
+                      onClick={() => onUpdateNode({ ...selectedNode, width: selectedNode.width + 20 })}
+                      className="px-1 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-mono leading-none cursor-pointer"
+                      title="Increase width by 20px"
+                    >
+                      +
+                    </button>
+                    <button
+                      disabled={isReadOnly}
+                      onClick={() => onUpdateNode({ ...selectedNode, width: Math.max(60, selectedNode.width - 20) })}
+                      className="px-1 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-mono leading-none cursor-pointer"
+                      title="Decrease width by 20px"
+                    >
+                      -
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Height (px)</label>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    disabled={isReadOnly}
+                    value={selectedNode.height}
+                    onChange={e => onUpdateNode({ ...selectedNode, height: Math.max(40, parseInt(e.target.value, 10) || 40) })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-slate-100 disabled:opacity-50"
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <button
+                      disabled={isReadOnly}
+                      onClick={() => onUpdateNode({ ...selectedNode, height: selectedNode.height + 20 })}
+                      className="px-1 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-mono leading-none cursor-pointer"
+                      title="Increase height by 20px"
+                    >
+                      +
+                    </button>
+                    <button
+                      disabled={isReadOnly}
+                      onClick={() => onUpdateNode({ ...selectedNode, height: Math.max(40, selectedNode.height - 20) })}
+                      className="px-1 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-mono leading-none cursor-pointer"
+                      title="Decrease height by 20px"
+                    >
+                      -
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Height (px)</label>
-              <input
-                type="number"
+
+            {/* Quick Size Presets */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+              <span className="text-[9px] uppercase font-mono text-slate-500">Preset:</span>
+              <button
                 disabled={isReadOnly}
-                value={selectedNode.height}
-                onChange={e => onUpdateNode({ ...selectedNode, height: parseInt(e.target.value, 10) || 50 })}
-                className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-slate-100 disabled:opacity-50"
-              />
+                onClick={() => onUpdateNode({ ...selectedNode, width: 180, height: 100 })}
+                className="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[9px] text-slate-300 font-mono cursor-pointer"
+              >
+                180×100
+              </button>
+              <button
+                disabled={isReadOnly}
+                onClick={() => onUpdateNode({ ...selectedNode, width: 240, height: 180 })}
+                className="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[9px] text-slate-300 font-mono cursor-pointer"
+              >
+                240×180
+              </button>
+              <button
+                disabled={isReadOnly}
+                onClick={() => onUpdateNode({ ...selectedNode, width: 320, height: 260 })}
+                className="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[9px] text-slate-300 font-mono cursor-pointer"
+              >
+                320×260
+              </button>
+              <button
+                disabled={isReadOnly}
+                onClick={() => onUpdateNode({ ...selectedNode, width: 420, height: 320 })}
+                className="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[9px] text-slate-300 font-mono cursor-pointer"
+              >
+                420×320
+              </button>
             </div>
           </div>
 
-          {/* Specialized ERD Attributes */}
+          {/* Specialized ERD Attributes & Columns Schema Editor */}
           {selectedNode.type === 'erd-entity' && (
-            <div className="pt-2 border-t border-slate-800 space-y-2">
+            <div className="pt-2 border-t border-slate-800 space-y-2.5">
               <div className="flex items-center justify-between">
-                <label className="text-[10px] uppercase font-mono text-sky-400 font-bold">ERD Table Columns</label>
+                <div>
+                  <label className="text-[10px] uppercase font-mono text-sky-400 font-bold flex items-center gap-1">
+                    <Database className="w-3.5 h-3.5" />
+                    ERD Columns Schema
+                  </label>
+                  <span className="text-[9px] text-slate-400 font-mono">
+                    {(selectedNode.data?.fields || []).length} columns defined
+                  </span>
+                </div>
                 <button
                   disabled={isReadOnly}
                   onClick={() => {
@@ -268,45 +357,451 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       ...selectedNode,
                       data: {
                         ...selectedNode.data,
-                        fields: [...fields, { name: 'new_column', type: 'VARCHAR(255)', isPk: false, isFk: false }],
+                        fields: [
+                          ...fields,
+                          { name: `col_${fields.length + 1}`, type: 'VARCHAR(255)', isPk: false, isFk: false, isNullable: true },
+                        ],
                       },
                     });
                   }}
-                  className="px-1.5 py-0.5 bg-sky-500/20 hover:bg-sky-500 text-sky-200 hover:text-white rounded text-[10px] font-mono cursor-pointer transition-colors"
+                  className="px-2 py-0.5 bg-sky-600 hover:bg-sky-500 text-white rounded text-[10px] font-semibold cursor-pointer transition-colors shadow-sm flex items-center gap-1"
                 >
-                  + Add Column
+                  <Plus className="w-3 h-3" />
+                  Add Column
                 </button>
               </div>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+
+              {/* Quick Schema Helpers */}
+              <div className="flex flex-wrap gap-1 p-1.5 bg-slate-950/60 rounded border border-slate-800/80">
+                <span className="text-[9px] text-slate-400 font-mono w-full">Quick Schema Helpers:</span>
+                <button
+                  disabled={isReadOnly}
+                  onClick={() => {
+                    const fields = selectedNode.data?.fields || [];
+                    onUpdateNode({
+                      ...selectedNode,
+                      data: {
+                        ...selectedNode.data,
+                        fields: [{ name: 'id', type: 'UUID', isPk: true, isFk: false, unique: true }, ...fields],
+                      },
+                    });
+                  }}
+                  className="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/60 rounded text-[9px] text-amber-300 font-mono cursor-pointer"
+                  title="Add Primary Key id UUID column"
+                >
+                  + PK id
+                </button>
+                <button
+                  disabled={isReadOnly}
+                  onClick={() => {
+                    const fields = selectedNode.data?.fields || [];
+                    onUpdateNode({
+                      ...selectedNode,
+                      data: {
+                        ...selectedNode.data,
+                        fields: [
+                          ...fields,
+                          { name: 'created_at', type: 'TIMESTAMPTZ', isPk: false, isFk: false },
+                          { name: 'updated_at', type: 'TIMESTAMPTZ', isPk: false, isFk: false },
+                        ],
+                      },
+                    });
+                  }}
+                  className="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/60 rounded text-[9px] text-sky-300 font-mono cursor-pointer"
+                  title="Add created_at and updated_at timestamps"
+                >
+                  + Timestamps
+                </button>
+                <button
+                  disabled={isReadOnly}
+                  onClick={() => {
+                    const fields = selectedNode.data?.fields || [];
+                    onUpdateNode({
+                      ...selectedNode,
+                      data: {
+                        ...selectedNode.data,
+                        fields: [
+                          ...fields,
+                          { name: 'status', type: 'VARCHAR(50)', isPk: false, isFk: false },
+                        ],
+                      },
+                    });
+                  }}
+                  className="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/60 rounded text-[9px] text-emerald-300 font-mono cursor-pointer"
+                >
+                  + Status
+                </button>
+                <button
+                  disabled={isReadOnly}
+                  onClick={() => {
+                    const fields = selectedNode.data?.fields || [];
+                    onUpdateNode({
+                      ...selectedNode,
+                      data: {
+                        ...selectedNode.data,
+                        fields: [
+                          ...fields,
+                          { name: 'user_id', type: 'UUID', isPk: false, isFk: true },
+                        ],
+                      },
+                    });
+                  }}
+                  className="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/60 rounded text-[9px] text-purple-300 font-mono cursor-pointer"
+                  title="Add user_id foreign key"
+                >
+                  + FK User
+                </button>
+              </div>
+
+              {/* Columns List with In-Depth Controls */}
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {(selectedNode.data?.fields || []).map((col: any, idx: number) => (
+                  <div key={idx} className="p-2 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5 group">
+                    <div className="flex items-center gap-1.5">
+                      {/* Reorder Buttons */}
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          disabled={isReadOnly || idx === 0}
+                          onClick={() => {
+                            const fields = [...(selectedNode.data?.fields || [])];
+                            const temp = fields[idx];
+                            fields[idx] = fields[idx - 1];
+                            fields[idx - 1] = temp;
+                            onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                          }}
+                          className="text-slate-500 hover:text-slate-200 disabled:opacity-20 p-0.2 cursor-pointer"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          disabled={isReadOnly || idx === (selectedNode.data?.fields?.length || 1) - 1}
+                          onClick={() => {
+                            const fields = [...(selectedNode.data?.fields || [])];
+                            const temp = fields[idx];
+                            fields[idx] = fields[idx + 1];
+                            fields[idx + 1] = temp;
+                            onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                          }}
+                          className="text-slate-500 hover:text-slate-200 disabled:opacity-20 p-0.2 cursor-pointer"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+
+                      {/* Column Name */}
+                      <input
+                        type="text"
+                        disabled={isReadOnly}
+                        value={col.name}
+                        onChange={e => {
+                          const fields = [...(selectedNode.data?.fields || [])];
+                          fields[idx] = { ...fields[idx], name: e.target.value };
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                        }}
+                        placeholder="column_name"
+                        className="flex-1 bg-slate-900 border border-slate-700/60 rounded px-1.5 py-1 text-slate-100 font-mono text-xs focus:outline-none focus:border-sky-500"
+                      />
+
+                      {/* Delete Button */}
+                      <button
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const fields = (selectedNode.data?.fields || []).filter((_: any, i: number) => i !== idx);
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                        }}
+                        className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer rounded hover:bg-slate-900"
+                        title="Delete Column"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Type & Constraint Badges Row */}
+                    <div className="flex items-center gap-1.5">
+                      {/* Data Type input */}
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          disabled={isReadOnly}
+                          value={col.type}
+                          onChange={e => {
+                            const fields = [...(selectedNode.data?.fields || [])];
+                            fields[idx] = { ...fields[idx], type: e.target.value };
+                            onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                          }}
+                          placeholder="DATA_TYPE"
+                          className="w-full bg-slate-900 border border-slate-700/60 rounded px-1.5 py-0.5 text-sky-300 font-mono text-[10px] uppercase focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+
+                      {/* Constraints Toggles */}
+                      <button
+                        type="button"
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const fields = [...(selectedNode.data?.fields || [])];
+                          fields[idx] = { ...fields[idx], isPk: !fields[idx].isPk };
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono transition-colors border cursor-pointer ${
+                          col.isPk
+                            ? 'bg-amber-500/30 text-amber-300 border-amber-500/70 shadow-sm'
+                            : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                        }`}
+                        title="Toggle Primary Key"
+                      >
+                        PK
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const fields = [...(selectedNode.data?.fields || [])];
+                          fields[idx] = { ...fields[idx], isFk: !fields[idx].isFk };
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono transition-colors border cursor-pointer ${
+                          col.isFk
+                            ? 'bg-purple-500/30 text-purple-300 border-purple-500/70 shadow-sm'
+                            : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                        }`}
+                        title="Toggle Foreign Key"
+                      >
+                        FK
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const fields = [...(selectedNode.data?.fields || [])];
+                          fields[idx] = { ...fields[idx], isUnique: !fields[idx].isUnique };
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono transition-colors border cursor-pointer ${
+                          col.isUnique
+                            ? 'bg-teal-500/30 text-teal-300 border-teal-500/70 shadow-sm'
+                            : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                        }`}
+                        title="Toggle Unique Constraint"
+                      >
+                        UQ
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const fields = [...(selectedNode.data?.fields || [])];
+                          fields[idx] = { ...fields[idx], isNullable: !fields[idx].isNullable };
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono transition-colors border cursor-pointer ${
+                          col.isNullable
+                            ? 'bg-slate-700 text-slate-200 border-slate-600'
+                            : 'bg-slate-900 text-slate-500 border-slate-800 hover:text-slate-300'
+                        }`}
+                        title="Toggle Nullable"
+                      >
+                        NULL
+                      </button>
+                    </div>
+
+                    {/* Quick Types Row */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto text-[8px] font-mono text-slate-500 pt-0.5">
+                      {['UUID', 'INT', 'VARCHAR', 'TEXT', 'BOOLEAN', 'TIMESTAMPTZ', 'DECIMAL', 'JSONB'].map(qt => (
+                        <button
+                          key={qt}
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() => {
+                            const fields = [...(selectedNode.data?.fields || [])];
+                            fields[idx] = { ...fields[idx], type: qt === 'VARCHAR' ? 'VARCHAR(255)' : qt };
+                            onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields } });
+                          }}
+                          className="hover:text-sky-300 hover:underline cursor-pointer"
+                        >
+                          {qt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Specialized UML Class Attributes & Methods */}
+          {selectedNode.type === 'uml-class' && (
+            <div className="pt-2 border-t border-slate-800 space-y-3">
+              {/* Stereotype */}
+              <div>
+                <label className="text-[10px] uppercase font-mono text-cyan-400 font-bold block mb-1">
+                  Stereotype
+                </label>
+                <input
+                  type="text"
+                  disabled={isReadOnly}
+                  value={selectedNode.data?.stereotype || ''}
+                  onChange={e => onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, stereotype: e.target.value } })}
+                  placeholder="e.g. interface, entity, service"
+                  className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-slate-100 font-mono text-xs"
+                />
+              </div>
+
+              {/* Attributes Editor */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] uppercase font-mono text-cyan-400 font-bold">
+                    Class Attributes
+                  </label>
+                  <button
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      const attrs = selectedNode.data?.attributes || [];
+                      onUpdateNode({
+                        ...selectedNode,
+                        data: {
+                          ...selectedNode.data,
+                          attributes: [...attrs, '- newField: string'],
+                        },
+                      });
+                    }}
+                    className="px-1.5 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-[10px] font-mono cursor-pointer"
+                  >
+                    + Add Field
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-36 overflow-y-auto">
+                  {(selectedNode.data?.attributes || []).map((attr: string, i: number) => (
+                    <div key={i} className="flex items-center gap-1 bg-slate-950 p-1 rounded border border-slate-800">
+                      <input
+                        type="text"
+                        disabled={isReadOnly}
+                        value={attr}
+                        onChange={e => {
+                          const attrs = [...(selectedNode.data?.attributes || [])];
+                          attrs[i] = e.target.value;
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, attributes: attrs } });
+                        }}
+                        className="flex-1 bg-transparent text-cyan-200 font-mono text-xs focus:outline-none"
+                      />
+                      <button
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const attrs = (selectedNode.data?.attributes || []).filter((_: any, idx: number) => idx !== i);
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, attributes: attrs } });
+                        }}
+                        className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Methods Editor */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] uppercase font-mono text-cyan-400 font-bold">
+                    Class Methods
+                  </label>
+                  <button
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      const methods = selectedNode.data?.methods || [];
+                      onUpdateNode({
+                        ...selectedNode,
+                        data: {
+                          ...selectedNode.data,
+                          methods: [...methods, '+ execute(): void'],
+                        },
+                      });
+                    }}
+                    className="px-1.5 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-[10px] font-mono cursor-pointer"
+                  >
+                    + Add Method
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-36 overflow-y-auto">
+                  {(selectedNode.data?.methods || []).map((m: string, i: number) => (
+                    <div key={i} className="flex items-center gap-1 bg-slate-950 p-1 rounded border border-slate-800">
+                      <input
+                        type="text"
+                        disabled={isReadOnly}
+                        value={m}
+                        onChange={e => {
+                          const methods = [...(selectedNode.data?.methods || [])];
+                          methods[i] = e.target.value;
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, methods } });
+                        }}
+                        className="flex-1 bg-transparent text-cyan-200 font-mono text-xs focus:outline-none"
+                      />
+                      <button
+                        disabled={isReadOnly}
+                        onClick={() => {
+                          const methods = (selectedNode.data?.methods || []).filter((_: any, idx: number) => idx !== i);
+                          onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, methods } });
+                        }}
+                        className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Specialized Swimlane Pool / Lanes Editor */}
+          {selectedNode.type === 'swimlane-pool' && (
+            <div className="pt-2 border-t border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] uppercase font-mono text-blue-400 font-bold flex items-center gap-1">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  Swimlanes (Partitions)
+                </label>
+                <button
+                  disabled={isReadOnly}
+                  onClick={() => {
+                    const lanes = selectedNode.data?.lanes || [];
+                    onUpdateNode({
+                      ...selectedNode,
+                      data: {
+                        ...selectedNode.data,
+                        lanes: [...lanes, `Lane ${lanes.length + 1}`],
+                      },
+                    });
+                  }}
+                  className="px-1.5 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-mono cursor-pointer"
+                >
+                  + Add Lane
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {(selectedNode.data?.lanes || []).map((lane: string, idx: number) => (
                   <div key={idx} className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded border border-slate-800">
                     <input
                       type="text"
                       disabled={isReadOnly}
-                      value={col.name}
+                      value={lane}
                       onChange={e => {
-                        const next = [...(selectedNode.data?.fields || [])];
-                        next[idx].name = e.target.value;
-                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields: next } });
+                        const next = [...(selectedNode.data?.lanes || [])];
+                        next[idx] = e.target.value;
+                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, lanes: next } });
                       }}
-                      className="flex-1 bg-transparent text-slate-100 font-mono text-[11px] focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      disabled={isReadOnly}
-                      value={col.type}
-                      onChange={e => {
-                        const next = [...(selectedNode.data?.fields || [])];
-                        next[idx].type = e.target.value;
-                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields: next } });
-                      }}
-                      className="w-24 bg-slate-900 px-1 py-0.5 rounded text-[10px] text-slate-400 font-mono"
+                      className="flex-1 bg-transparent text-slate-100 font-mono text-xs focus:outline-none"
                     />
                     <button
                       disabled={isReadOnly}
                       onClick={() => {
-                        const next = (selectedNode.data?.fields || []).filter((_: any, i: number) => i !== idx);
-                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, fields: next } });
+                        const next = (selectedNode.data?.lanes || []).filter((_: any, i: number) => i !== idx);
+                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, lanes: next } });
                       }}
                       className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
                     >
@@ -317,6 +812,115 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
             </div>
           )}
+
+          {/* Specialized BPMN Task Configuration */}
+          {selectedNode.type === 'bpmn-task' && (
+            <div className="pt-2 border-t border-slate-800 space-y-2">
+              <label className="text-[10px] uppercase font-mono text-blue-400 font-bold flex items-center gap-1">
+                <Cpu className="w-3.5 h-3.5" />
+                BPMN Task Specifications
+              </label>
+              <div>
+                <span className="text-[10px] text-slate-400 block mb-1">Task Sub-Type</span>
+                <select
+                  disabled={isReadOnly}
+                  value={selectedNode.data?.taskType || 'user'}
+                  onChange={e => onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, taskType: e.target.value } })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-slate-100 font-mono text-xs"
+                >
+                  <option value="user">User Task (Manual)</option>
+                  <option value="service">Service Task (Automated / API)</option>
+                  <option value="send">Send Message Task</option>
+                  <option value="receive">Receive Message Task</option>
+                  <option value="script">Script Task</option>
+                  <option value="subprocess">Sub-Process Container</option>
+                </select>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 block mb-1">Expected SLA / Duration</span>
+                <input
+                  type="text"
+                  disabled={isReadOnly}
+                  value={selectedNode.data?.duration || ''}
+                  onChange={e => onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, duration: e.target.value } })}
+                  placeholder="e.g. 2 hours, 24h SLA"
+                  className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-slate-100 font-mono text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Universal Custom Key-Value Attributes for ALL Node Types */}
+          <div className="pt-2 border-t border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] uppercase font-mono text-slate-400 font-bold">
+                Custom Data &amp; Attributes
+              </label>
+              <button
+                disabled={isReadOnly}
+                onClick={() => {
+                  const attrs = selectedNode.data?.customAttributes || [];
+                  onUpdateNode({
+                    ...selectedNode,
+                    data: {
+                      ...selectedNode.data,
+                      customAttributes: [...attrs, { key: 'attribute', value: 'value' }],
+                    },
+                  });
+                }}
+                className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-mono cursor-pointer"
+              >
+                + Add Prop
+              </button>
+            </div>
+            <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {(selectedNode.data?.customAttributes || []).length === 0 ? (
+                <div className="text-[10px] text-slate-500 italic p-1">
+                  No custom attributes added. Click "+ Add Prop" to store metadata like owner, port, cost, SLA, etc.
+                </div>
+              ) : (
+                (selectedNode.data?.customAttributes || []).map((attr: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-1.5 bg-slate-950 p-1 rounded border border-slate-800">
+                    <input
+                      type="text"
+                      disabled={isReadOnly}
+                      value={attr.key}
+                      onChange={e => {
+                        const attrs = [...(selectedNode.data?.customAttributes || [])];
+                        attrs[idx] = { ...attrs[idx], key: e.target.value };
+                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, customAttributes: attrs } });
+                      }}
+                      placeholder="key"
+                      className="w-24 bg-transparent text-slate-400 font-mono text-[11px] focus:outline-none"
+                    />
+                    <span className="text-slate-600">:</span>
+                    <input
+                      type="text"
+                      disabled={isReadOnly}
+                      value={attr.value}
+                      onChange={e => {
+                        const attrs = [...(selectedNode.data?.customAttributes || [])];
+                        attrs[idx] = { ...attrs[idx], value: e.target.value };
+                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, customAttributes: attrs } });
+                      }}
+                      placeholder="value"
+                      className="flex-1 bg-transparent text-slate-100 font-mono text-[11px] focus:outline-none"
+                    />
+                    <button
+                      disabled={isReadOnly}
+                      onClick={() => {
+                        const attrs = (selectedNode.data?.customAttributes || []).filter((_: any, i: number) => i !== idx);
+                        onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, customAttributes: attrs } });
+                      }}
+                      className="text-slate-500 hover:text-rose-400 p-0.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
 
           {/* Specialized PERT Analysis */}
           {selectedNode.type === 'pert-activity' && (

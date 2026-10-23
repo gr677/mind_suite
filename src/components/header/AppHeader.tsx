@@ -255,7 +255,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           )}
         </div>
 
-        {/* Real-Time Collaborator Avatars */}
+        {/* Real-Time Collaborator Avatars (Hidden for now as requested) */}
+        {/*
         <div className="hidden sm:flex items-center -space-x-1.5 px-1">
           {collaborators.map(c => (
             <div
@@ -268,6 +269,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
             </div>
           ))}
         </div>
+        */}
 
         {/* Offline Sync Status Pill */}
         <button
