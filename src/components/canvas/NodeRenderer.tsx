@@ -28,9 +28,11 @@ interface NodeRendererProps {
   isSelected: boolean;
   isDragging: boolean;
   collaborators: Collaborator[];
+  onNodeMouseDown?: (nodeId: string, e: React.MouseEvent) => void;
   onDrillDown?: (pageId: string) => void;
   onStartConnection?: (nodeId: string, anchor: 'top' | 'right' | 'bottom' | 'left', e: React.MouseEvent) => void;
   onOpenDoc?: (node: DiagramNode) => void;
+  onUpdateLabel?: (nodeId: string, newLabel: string) => void;
   isReadOnly?: boolean;
 }
 
@@ -39,11 +41,15 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   isSelected,
   isDragging,
   collaborators,
+  onNodeMouseDown,
   onDrillDown,
   onStartConnection,
   onOpenDoc,
+  onUpdateLabel,
   isReadOnly,
 }) => {
+  const [isEditingLabel, setIsEditingLabel] = React.useState(false);
+  const [editedLabel, setEditedLabel] = React.useState(node.label);
   const activeCollaborator = collaborators.find(c => c.selectedNodeId === node.id);
 
   // Render anchor handles on hover for wiring connections
@@ -439,6 +445,13 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
     }
   };
 
+  const handleSaveLabel = () => {
+    if (editedLabel.trim() && editedLabel !== node.label) {
+      onUpdateLabel?.(node.id, editedLabel.trim());
+    }
+    setIsEditingLabel(false);
+  };
+
   return (
     <div
       id={`node-${node.id}`}
@@ -449,9 +462,28 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         height: `${node.height}px`,
         touchAction: 'none',
       }}
-      className={`absolute group select-none transition-shadow ${
+      className={`absolute group select-none transition-shadow pointer-events-auto ${
         isSelected ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-950 z-20' : 'z-10'
       } ${isDragging ? 'cursor-grabbing opacity-90' : 'cursor-grab'}`}
+      onMouseDown={e => {
+        if (
+          (e.target as HTMLElement).closest('button') ||
+          (e.target as HTMLElement).closest('.cursor-crosshair') ||
+          (e.target as HTMLElement).tagName === 'INPUT' ||
+          (e.target as HTMLElement).tagName === 'TEXTAREA'
+        ) {
+          return;
+        }
+        e.stopPropagation();
+        onNodeMouseDown?.(node.id, e);
+      }}
+      onDoubleClick={e => {
+        e.stopPropagation();
+        if (!isReadOnly) {
+          setIsEditingLabel(true);
+          setEditedLabel(node.label);
+        }
+      }}
     >
       {/* Real-time collaborator active badge on node */}
       {activeCollaborator && (
@@ -503,6 +535,28 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       {/* Render Node Body */}
       {renderNodeBody()}
+
+      {/* Inline Label Editor (on Double Click) */}
+      {isEditingLabel && (
+        <div
+          className="absolute inset-0 bg-slate-900/90 rounded border-2 border-blue-400 flex items-center justify-center p-2 z-50 shadow-2xl"
+          onClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          <input
+            type="text"
+            value={editedLabel}
+            onChange={e => setEditedLabel(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleSaveLabel();
+              if (e.key === 'Escape') setIsEditingLabel(false);
+            }}
+            onBlur={handleSaveLabel}
+            autoFocus
+            className="w-full bg-slate-950 text-white text-xs px-2 py-1 rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-400 text-center"
+          />
+        </div>
+      )}
     </div>
   );
 };

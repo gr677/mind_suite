@@ -486,6 +486,12 @@ export default function App() {
             setIsInspectorOpen(true);
           }}
           onDropNewShape={handleDropNewShape}
+          onUpdateNodeLabel={(nodeId, label) => {
+            const targetNode = currentPage.nodes.find(n => n.id === nodeId);
+            if (targetNode) {
+              handleUpdateSingleNode({ ...targetNode, label });
+            }
+          }}
         />
 
         {/* Right Sidebar: Inspector, Documentation, Comments & Groups */}

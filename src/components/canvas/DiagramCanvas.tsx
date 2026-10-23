@@ -34,6 +34,7 @@ interface DiagramCanvasProps {
   onDrillDown: (pageId: string) => void;
   onOpenDoc: (node: DiagramNode) => void;
   onDropNewShape: (shapeTemplateId: string, canvasX: number, canvasY: number) => void;
+  onUpdateNodeLabel?: (nodeId: string, label: string) => void;
 }
 
 export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
@@ -52,6 +53,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   onDrillDown,
   onOpenDoc,
   onDropNewShape,
+  onUpdateNodeLabel,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -127,130 +129,165 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     }
   };
 
-  // Mouse Down on Canvas (Pan or Node Drag)
+  // Direct Node Mouse Down for robust dragging & selection
+  const handleNodeMouseDown = (nodeId: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    onSelectNode(nodeId);
+    onSelectEdge(null);
+
+    if (isReadOnly) return;
+
+    const clickedNode = nodes.find(n => n.id === nodeId);
+    if (clickedNode) {
+      const canvasCoords = screenToCanvasCoords(e.clientX, e.clientY);
+      setDraggingNodeId(nodeId);
+      setDragOffset({
+        x: canvasCoords.x - clickedNode.x,
+        y: canvasCoords.y - clickedNode.y,
+      });
+
+      // If this node is a group container, capture all child node positions for synced movement!
+      if (clickedNode.isGroup) {
+        const children: Record<string, { x: number; y: number }> = {};
+        nodes.filter(n => n.parentId === clickedNode.id).forEach(c => {
+          children[c.id] = { x: c.x, y: c.y };
+        });
+        setInitialChildPositions(children);
+      }
+    }
+  };
+
+  // Mouse Down on Canvas (Pan or background click)
   const handleMouseDown = (e: React.MouseEvent) => {
-    // If middle click or space pressed or clicked background
-    if (e.button === 1 || e.button === 0 && (e.target as HTMLElement).id === 'canvas-background') {
+    const target = e.target as HTMLElement;
+    const isBackground =
+      target === containerRef.current ||
+      target.id === 'canvas-background' ||
+      target.id === 'canvas-background-rect' ||
+      target.tagName === 'svg' ||
+      target.tagName === 'rect';
+
+    if (e.button === 1 || (e.button === 0 && isBackground)) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
       onSelectNode(null);
       onSelectEdge(null);
       return;
     }
-
-    // Check if clicked a node
-    const targetElement = (e.target as HTMLElement).closest('[id^="node-"]');
-    if (targetElement && !isReadOnly) {
-      const nodeId = targetElement.id.replace('node-', '');
-      const clickedNode = nodes.find(n => n.id === nodeId);
-      if (clickedNode) {
-        onSelectNode(nodeId);
-        onSelectEdge(null);
-
-        const canvasCoords = screenToCanvasCoords(e.clientX, e.clientY);
-        setDraggingNodeId(nodeId);
-        setDragOffset({
-          x: canvasCoords.x - clickedNode.x,
-          y: canvasCoords.y - clickedNode.y,
-        });
-
-        // If this node is a group container, capture all child node positions for synced movement!
-        if (clickedNode.isGroup) {
-          const children: Record<string, { x: number; y: number }> = {};
-          nodes.filter(n => n.parentId === clickedNode.id).forEach(c => {
-            children[c.id] = { x: c.x, y: c.y };
-          });
-          setInitialChildPositions(children);
-        }
-      }
-    }
   };
 
-  // Mouse Move on Canvas
+  // Window-level mouse move and mouse up listeners while dragging or panning
+  useEffect(() => {
+    if (!isPanning && !draggingNodeId) return;
+
+    const onWindowMouseMove = (e: MouseEvent) => {
+      const canvasCoords = screenToCanvasCoords(e.clientX, e.clientY);
+      setCurrentMousePos(canvasCoords);
+
+      if (isPanning) {
+        setPan({
+          x: e.clientX - panStart.x,
+          y: e.clientY - panStart.y,
+        });
+        return;
+      }
+
+      if (draggingNodeId && !isReadOnly) {
+        const nodeIndex = nodes.findIndex(n => n.id === draggingNodeId);
+        if (nodeIndex !== -1) {
+          const currentNode = nodes[nodeIndex];
+          let newX = canvasCoords.x - dragOffset.x;
+          let newY = canvasCoords.y - dragOffset.y;
+
+          if (gridSnap) {
+            newX = Math.round(newX / 20) * 20;
+            newY = Math.round(newY / 20) * 20;
+          }
+
+          const deltaX = newX - currentNode.x;
+          const deltaY = newY - currentNode.y;
+
+          const updatedNodes = [...nodes];
+          updatedNodes[nodeIndex] = { ...currentNode, x: newX, y: newY };
+
+          // Synchronously move all nested child nodes if moving a group container!
+          if (currentNode.isGroup) {
+            nodes.forEach((n, idx) => {
+              if (n.parentId === currentNode.id) {
+                updatedNodes[idx] = {
+                  ...n,
+                  x: n.x + deltaX,
+                  y: n.y + deltaY,
+                };
+              }
+            });
+          }
+
+          onUpdateNodes(updatedNodes);
+        }
+      }
+    };
+
+    const onWindowMouseUp = (e: MouseEvent) => {
+      if (isPanning) {
+        setIsPanning(false);
+      }
+
+      if (draggingNodeId && !isReadOnly) {
+        const movedNode = nodes.find(n => n.id === draggingNodeId);
+        if (movedNode && !movedNode.isGroup) {
+          const enclosingGroup = nodes.find(
+            g =>
+              g.isGroup &&
+              g.id !== movedNode.id &&
+              movedNode.x >= g.x &&
+              movedNode.y >= g.y &&
+              movedNode.x + movedNode.width <= g.x + g.width &&
+              movedNode.y + movedNode.height <= g.y + g.height
+          );
+
+          if (enclosingGroup && movedNode.parentId !== enclosingGroup.id) {
+            const updated = nodes.map(n =>
+              n.id === movedNode.id ? { ...n, parentId: enclosingGroup.id } : n
+            );
+            onUpdateNodes(updated);
+          }
+        }
+        setDraggingNodeId(null);
+      }
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+    };
+  }, [
+    isPanning,
+    panStart,
+    draggingNodeId,
+    dragOffset,
+    gridSnap,
+    isReadOnly,
+    nodes,
+    onUpdateNodes,
+    screenToCanvasCoords,
+  ]);
+
+  // Local canvas mouse move for cursor position and edge drawing
   const handleMouseMove = (e: React.MouseEvent) => {
     const canvasCoords = screenToCanvasCoords(e.clientX, e.clientY);
     setCurrentMousePos(canvasCoords);
-
-    if (isPanning) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
-      });
-      return;
-    }
-
-    if (draggingNodeId && !isReadOnly) {
-      const nodeIndex = nodes.findIndex(n => n.id === draggingNodeId);
-      if (nodeIndex !== -1) {
-        const currentNode = nodes[nodeIndex];
-        let newX = canvasCoords.x - dragOffset.x;
-        let newY = canvasCoords.y - dragOffset.y;
-
-        if (gridSnap) {
-          newX = Math.round(newX / 20) * 20;
-          newY = Math.round(newY / 20) * 20;
-        }
-
-        const deltaX = newX - currentNode.x;
-        const deltaY = newY - currentNode.y;
-
-        // Clone nodes
-        const updatedNodes = [...nodes];
-        updatedNodes[nodeIndex] = { ...currentNode, x: newX, y: newY };
-
-        // Synchronously move all nested child nodes if moving a group container!
-        if (currentNode.isGroup) {
-          nodes.forEach((n, idx) => {
-            if (n.parentId === currentNode.id) {
-              updatedNodes[idx] = {
-                ...n,
-                x: n.x + deltaX,
-                y: n.y + deltaY,
-              };
-            }
-          });
-        }
-
-        onUpdateNodes(updatedNodes);
-      }
-    }
   };
 
-  // Mouse Up on Canvas
+  // Local mouse up on canvas (e.g., finishing edge drawing)
   const handleMouseUp = (e: React.MouseEvent) => {
-    setIsPanning(false);
-
-    // If node was dragged, check for automatic group enclosure
-    if (draggingNodeId && !isReadOnly) {
-      const movedNode = nodes.find(n => n.id === draggingNodeId);
-      if (movedNode && !movedNode.isGroup) {
-        // Find if this node is inside a group container
-        const enclosingGroup = nodes.find(g =>
-          g.isGroup &&
-          g.id !== movedNode.id &&
-          movedNode.x >= g.x &&
-          movedNode.y >= g.y &&
-          movedNode.x + movedNode.width <= g.x + g.width &&
-          movedNode.y + movedNode.height <= g.y + g.height
-        );
-
-        if (enclosingGroup && movedNode.parentId !== enclosingGroup.id) {
-          const updated = nodes.map(n =>
-            n.id === movedNode.id ? { ...n, parentId: enclosingGroup.id } : n
-          );
-          onUpdateNodes(updated);
-        }
-      }
-      setDraggingNodeId(null);
-    }
-
-    // If in edge drawing mode, check if dropped on a target node
     if (connectingFrom && !isReadOnly) {
       const targetElement = (e.target as HTMLElement).closest('[id^="node-"]');
       if (targetElement) {
         const targetNodeId = targetElement.id.replace('node-', '');
         if (targetNodeId !== connectingFrom.nodeId) {
-          // Create new edge
           const newEdge: DiagramEdge = {
             id: `edge-${Date.now()}`,
             sourceNodeId: connectingFrom.nodeId,
@@ -498,11 +535,13 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
             isSelected={selectedNodeId === node.id}
             isDragging={draggingNodeId === node.id}
             collaborators={collaborators}
+            onNodeMouseDown={handleNodeMouseDown}
             onDrillDown={onDrillDown}
             onStartConnection={(nodeId, anchor) => {
               setConnectingFrom({ nodeId, anchor });
             }}
             onOpenDoc={onOpenDoc}
+            onUpdateLabel={onUpdateNodeLabel}
             isReadOnly={isReadOnly}
           />
         ))}
