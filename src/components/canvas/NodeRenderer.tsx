@@ -147,13 +147,19 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       case 'bpmn-event': {
         const eventType = node.data?.eventType || 'start';
         const isEnd = eventType === 'end';
+        const defaultFill = isEnd ? '#ef4444' : '#10b981';
+        const defaultStroke = isEnd ? '#b91c1c' : '#059669';
+        const fill = node.style?.fill || defaultFill;
+        const stroke = node.style?.stroke || defaultStroke;
+
         return (
           <div
-            className={`flex flex-col items-center justify-center h-full rounded-full shadow-lg text-white font-medium p-2 text-center transition-all ${
-              isEnd
-                ? 'bg-rose-600 border-4 border-rose-900 text-rose-50'
-                : 'bg-emerald-600 border-2 border-emerald-400 text-emerald-50'
-            }`}
+            className="flex flex-col items-center justify-center h-full rounded-full shadow-lg text-white font-medium p-2 text-center transition-all"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: isEnd ? '4px' : '2px',
+            }}
           >
             <span className="text-[11px] leading-tight px-1 font-semibold truncate max-w-[90%]">
               {node.label}
@@ -165,13 +171,19 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       // 3. BPMN Task / Sub-Process
       case 'bpmn-task': {
         const isSubprocess = node.data?.taskType === 'subprocess' || !!node.drilldownPageId;
+        const defaultFill = isSubprocess ? 'rgba(88, 28, 135, 0.85)' : 'rgba(15, 23, 42, 0.95)';
+        const defaultStroke = isSubprocess ? '#a855f7' : '#3b82f6';
+        const fill = node.style?.fill || defaultFill;
+        const stroke = node.style?.stroke || defaultStroke;
+
         return (
           <div
-            className={`flex flex-col justify-between h-full p-2.5 rounded-lg shadow-xl text-left border-2 transition-all ${
-              isSubprocess
-                ? 'bg-purple-950/80 border-purple-500/90 text-purple-100 border-dashed'
-                : 'bg-slate-900/90 border-blue-500/80 text-slate-100'
-            }`}
+            className="flex flex-col justify-between h-full p-2.5 rounded-lg shadow-xl text-left border-2 transition-all"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderStyle: isSubprocess ? 'dashed' : 'solid',
+            }}
           >
             <div className="flex items-start justify-between gap-1">
               <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1">
@@ -385,24 +397,37 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       case 'uml-class': {
         const attrs = node.data?.attributes || [];
         const methods = node.data?.methods || [];
+        const defaultFill = 'rgba(15, 23, 42, 0.95)';
+        const defaultStroke = '#06b6d4';
+        const fill = node.style?.fill || defaultFill;
+        const stroke = node.style?.stroke || defaultStroke;
+
         return (
-          <div className="flex flex-col h-full bg-slate-900/95 border-2 border-cyan-500/80 rounded-md shadow-xl overflow-hidden text-xs">
-            <div className="px-3 py-1.5 bg-cyan-950/80 border-b border-cyan-500/40 text-center">
+          <div
+            className="flex flex-col h-full rounded-md shadow-xl overflow-hidden text-xs transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: `${node.style?.strokeWidth ?? 2}px`,
+              borderStyle: 'solid',
+            }}
+          >
+            <div className="px-3 py-1.5 bg-black/40 border-b border-white/10 text-center">
               {node.data?.stereotype && (
-                <div className="text-[10px] text-cyan-400/90 font-mono">«{node.data.stereotype}»</div>
+                <div className="text-[10px] text-cyan-400 font-mono">«{node.data.stereotype}»</div>
               )}
-              <div className="font-bold text-cyan-200 truncate">{node.label}</div>
+              <div className="font-bold text-white truncate">{node.label}</div>
             </div>
             {/* Attributes */}
-            <div className="px-2.5 py-1.5 border-b border-slate-800 font-mono text-[11px] text-slate-300 divide-y divide-slate-800/40 max-h-[80px] overflow-y-auto">
+            <div className="px-2.5 py-1.5 border-b border-white/10 font-mono text-[11px] text-slate-300 divide-y divide-white/5 max-h-[80px] overflow-y-auto">
               {attrs.map((a: string, i: number) => (
                 <div key={i} className="py-0.5 truncate">{a}</div>
               ))}
             </div>
             {/* Methods */}
-            <div className="flex-1 px-2.5 py-1.5 font-mono text-[11px] text-slate-300 divide-y divide-slate-800/40 overflow-y-auto">
+            <div className="flex-1 px-2.5 py-1.5 font-mono text-[11px] text-slate-300 divide-y divide-white/5 overflow-y-auto">
               {methods.map((m: string, i: number) => (
-                <div key={i} className="py-0.5 text-cyan-100/90 truncate">{m}</div>
+                <div key={i} className="py-0.5 text-cyan-200 truncate">{m}</div>
               ))}
             </div>
           </div>
@@ -411,8 +436,17 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       // 8. DFD Process (Round bubble)
       case 'dfd-process': {
+        const fill = node.style?.fill || 'rgba(3, 105, 161, 0.85)';
+        const stroke = node.style?.stroke || '#38bdf8';
         return (
-          <div className="flex flex-col items-center justify-center h-full rounded-full bg-sky-900/90 border-2 border-sky-400 text-sky-100 p-3 shadow-xl text-center">
+          <div
+            className="flex flex-col items-center justify-center h-full rounded-full text-sky-100 p-3 shadow-xl text-center transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: `${node.style?.strokeWidth ?? 2}px`,
+            }}
+          >
             <span className="text-[10px] font-mono text-sky-300 font-bold">{node.data?.processNumber || '1.0'}</span>
             <span className="text-xs font-semibold leading-tight mt-1 line-clamp-3">{node.label}</span>
           </div>
@@ -421,8 +455,19 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       // 9. DFD Store (Yourdon Open Box)
       case 'dfd-store': {
+        const fill = node.style?.fill || 'rgba(30, 41, 59, 0.9)';
+        const stroke = node.style?.stroke || '#fbbf24';
         return (
-          <div className="flex items-center justify-start h-full bg-slate-900/90 border-y-2 border-amber-400/90 px-3 shadow-lg">
+          <div
+            className="flex items-center justify-start h-full px-3 shadow-lg transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderTopColor: stroke,
+              borderBottomColor: stroke,
+              borderTopWidth: '2px',
+              borderBottomWidth: '2px',
+            }}
+          >
             <span className="font-mono text-xs font-bold text-amber-400 mr-2 border-r border-amber-500/40 pr-2">
               {node.data?.storeId || 'D1'}
             </span>
@@ -433,8 +478,17 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       // 10. DFD External Entity
       case 'dfd-entity': {
+        const fill = node.style?.fill || 'rgba(51, 65, 85, 0.9)';
+        const stroke = node.style?.stroke || '#94a3b8';
         return (
-          <div className="flex items-center justify-center h-full bg-slate-800/90 border-2 border-slate-400 rounded p-2 text-center shadow-lg">
+          <div
+            className="flex items-center justify-center h-full rounded p-2 text-center shadow-lg transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: '2px',
+            }}
+          >
             <span className="text-xs font-semibold text-slate-200">{node.label}</span>
           </div>
         );
@@ -442,8 +496,17 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       // 11. IDEF0 Box
       case 'idef0-box': {
+        const fill = node.style?.fill || 'rgba(30, 41, 59, 0.95)';
+        const stroke = node.style?.stroke || '#3b82f6';
         return (
-          <div className="flex flex-col justify-between h-full bg-slate-900/95 border-2 border-blue-500 rounded p-3 text-left shadow-xl">
+          <div
+            className="flex flex-col justify-between h-full rounded p-3 text-left shadow-xl transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: '2px',
+            }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-blue-400 font-mono">{node.data?.boxNumber || 'A0'}</span>
               <span className="text-[9px] font-mono text-slate-400">IDEF0 FUNCTION</span>
@@ -684,11 +747,67 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         );
       }
 
-      // Default Standard Flowchart Box
-      default: {
+      // 18. Mindmap Node & Standard Flowchart Process Box
+      case 'mindmap-node':
+      case 'flow-process':
+      case 'vsm-step':
+      case 'fishbone-category': {
+        const isMindmap = node.type === 'mindmap-node' || node.style?.rounded === 9999;
+        const defaultFill = isMindmap ? 'rgba(139, 92, 246, 0.85)' : 'rgba(30, 41, 59, 0.95)';
+        const defaultStroke = isMindmap ? '#c084fc' : '#3b82f6';
+        const fill = node.style?.fill || defaultFill;
+        const stroke = node.style?.stroke || defaultStroke;
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const rounded = node.style?.rounded !== undefined ? `${node.style.rounded}px` : (isMindmap ? '9999px' : '8px');
+
         return (
-          <div className="flex items-center justify-center h-full p-2.5 rounded-md bg-slate-900 border-2 border-blue-500 text-slate-100 shadow-xl text-center">
-            <span className="text-xs font-medium leading-snug line-clamp-3">{node.label}</span>
+          <div
+            className="flex flex-col items-center justify-center h-full p-2.5 shadow-xl text-center transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: `${strokeWidth}px`,
+              borderStyle: node.style?.strokeDasharray ? 'dashed' : 'solid',
+              borderRadius: rounded,
+              color: textColor,
+            }}
+          >
+            <span className="text-xs font-semibold leading-snug line-clamp-3 select-none">
+              {node.label}
+            </span>
+            {node.data?.cycleTime && (
+              <span className="text-[9px] font-mono opacity-80 mt-1">
+                C/T: {node.data.cycleTime} | Uptime: {node.data.uptime || '98%'}
+              </span>
+            )}
+          </div>
+        );
+      }
+
+      // Default Node Renderer (Honors all custom colors, fill, stroke, and rounded attributes)
+      default: {
+        const fill = node.style?.fill || 'rgba(30, 41, 59, 0.95)';
+        const stroke = node.style?.stroke || '#3b82f6';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const rounded = node.style?.rounded !== undefined ? `${node.style.rounded}px` : '8px';
+
+        return (
+          <div
+            className="flex items-center justify-center h-full p-2.5 shadow-xl text-center transition-colors"
+            style={{
+              backgroundColor: fill,
+              borderColor: stroke,
+              borderWidth: `${strokeWidth}px`,
+              borderStyle: node.style?.strokeDasharray ? 'dashed' : 'solid',
+              borderRadius: rounded,
+              color: textColor,
+            }}
+          >
+            <span className="text-xs font-semibold leading-snug line-clamp-3 select-none">
+              {node.label}
+            </span>
           </div>
         );
       }

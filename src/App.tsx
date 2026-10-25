@@ -724,6 +724,7 @@ export default function App() {
         isOpen={isWorkspaceModalOpen}
         onClose={() => setIsWorkspaceModalOpen(false)}
         onLoadDiagram={handleLoadWorkspaceDiagram}
+        theme={settings.theme}
       />
 
       <SettingsModal

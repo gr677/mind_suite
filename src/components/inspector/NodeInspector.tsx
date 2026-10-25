@@ -25,6 +25,7 @@ import {
   Database,
   Cpu,
   FolderOpen,
+  Palette,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
 
@@ -338,6 +339,207 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               >
                 420×320
               </button>
+            </div>
+          </div>
+
+          {/* Node Appearance & Color Palette (Universal for Mindmap, Flowchart, and all nodes) */}
+          <div className="pt-2 border-t border-slate-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] uppercase font-mono text-slate-400 font-bold flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-blue-400" />
+                <span>Appearance &amp; Colors</span>
+              </label>
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={() => {
+                  onUpdateNode({
+                    ...selectedNode,
+                    style: {
+                      ...selectedNode.style,
+                      fill: undefined,
+                      stroke: undefined,
+                      textColor: undefined,
+                      rounded: undefined,
+                    },
+                  });
+                }}
+                className="text-[9px] font-mono text-slate-500 hover:text-slate-300 cursor-pointer"
+                title="Reset to default node colors"
+              >
+                Reset Default
+              </button>
+            </div>
+
+            {/* Quick Palettes */}
+            <div>
+              <span className="text-[9px] font-mono text-slate-500 block mb-1">Preset Themes:</span>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: 'Purple / Mind', fill: 'rgba(109, 40, 217, 0.85)', stroke: '#c084fc', text: '#ffffff' },
+                  { label: 'Azure Blue', fill: 'rgba(30, 58, 138, 0.9)', stroke: '#3b82f6', text: '#ffffff' },
+                  { label: 'Emerald', fill: 'rgba(6, 78, 59, 0.9)', stroke: '#10b981', text: '#ffffff' },
+                  { label: 'Amber Gold', fill: 'rgba(120, 53, 15, 0.9)', stroke: '#f59e0b', text: '#ffffff' },
+                  { label: 'Rose Pink', fill: 'rgba(136, 19, 55, 0.9)', stroke: '#f43f5e', text: '#ffffff' },
+                  { label: 'Cyan Ocean', fill: 'rgba(14, 116, 144, 0.9)', stroke: '#06b6d4', text: '#ffffff' },
+                  { label: 'Midnight Slate', fill: 'rgba(15, 23, 42, 0.95)', stroke: '#0284c7', text: '#ffffff' },
+                  { label: 'Light Clean', fill: '#f8fafc', stroke: '#94a3b8', text: '#0f172a' },
+                ].map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      onUpdateNode({
+                        ...selectedNode,
+                        style: {
+                          ...selectedNode.style,
+                          fill: p.fill,
+                          stroke: p.stroke,
+                          textColor: p.text,
+                        },
+                      });
+                    }}
+                    className="p-1 rounded-md border border-slate-700/80 hover:scale-105 transition-transform flex items-center gap-1.5 text-left cursor-pointer"
+                    style={{ backgroundColor: p.fill }}
+                    title={p.label}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.stroke }} />
+                    <span className="text-[9px] font-medium truncate" style={{ color: p.text }}>
+                      {p.label.split(' ')[0]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Color Pickers */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-1">Fill Background</label>
+                <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded p-1">
+                  <input
+                    type="color"
+                    disabled={isReadOnly}
+                    value={
+                      selectedNode.style?.fill?.startsWith('#')
+                        ? selectedNode.style.fill
+                        : '#1e293b'
+                    }
+                    onChange={e => {
+                      onUpdateNode({
+                        ...selectedNode,
+                        style: {
+                          ...selectedNode.style,
+                          fill: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    disabled={isReadOnly}
+                    value={selectedNode.style?.fill || ''}
+                    placeholder="#1e293b"
+                    onChange={e => {
+                      onUpdateNode({
+                        ...selectedNode,
+                        style: {
+                          ...selectedNode.style,
+                          fill: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-full bg-transparent text-[11px] font-mono text-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-1">Border / Stroke</label>
+                <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded p-1">
+                  <input
+                    type="color"
+                    disabled={isReadOnly}
+                    value={
+                      selectedNode.style?.stroke?.startsWith('#')
+                        ? selectedNode.style.stroke
+                        : '#3b82f6'
+                    }
+                    onChange={e => {
+                      onUpdateNode({
+                        ...selectedNode,
+                        style: {
+                          ...selectedNode.style,
+                          stroke: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    disabled={isReadOnly}
+                    value={selectedNode.style?.stroke || ''}
+                    placeholder="#3b82f6"
+                    onChange={e => {
+                      onUpdateNode({
+                        ...selectedNode,
+                        style: {
+                          ...selectedNode.style,
+                          stroke: e.target.value,
+                        },
+                      });
+                    }}
+                    className="w-full bg-transparent text-[11px] font-mono text-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Corner Radius (Rounded Pill for Mindmaps vs Square) */}
+            <div>
+              <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                <span>Corner Rounding</span>
+                <span className="font-mono text-sky-400">
+                  {selectedNode.style?.rounded !== undefined
+                    ? `${selectedNode.style.rounded}px`
+                    : selectedNode.type === 'mindmap-node'
+                    ? 'Pill (Mindmap)'
+                    : '8px (Default)'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {[
+                  { label: 'Square (0)', val: 0 },
+                  { label: 'Slight (6px)', val: 6 },
+                  { label: 'Medium (12px)', val: 12 },
+                  { label: 'Pill / Oval', val: 9999 },
+                ].map(r => (
+                  <button
+                    key={r.label}
+                    type="button"
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      onUpdateNode({
+                        ...selectedNode,
+                        style: {
+                          ...selectedNode.style,
+                          rounded: r.val,
+                        },
+                      });
+                    }}
+                    className={`flex-1 py-1 text-[9px] rounded border transition-colors cursor-pointer ${
+                      selectedNode.style?.rounded === r.val
+                        ? 'bg-blue-600/30 text-blue-300 border-blue-500'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {r.label.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

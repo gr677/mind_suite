@@ -17,6 +17,7 @@ import {
   Plus,
   Compass,
   Settings,
+  Link2,
 } from 'lucide-react';
 
 import { ContextMenu, ContextMenuPosition } from './ContextMenu';
@@ -216,6 +217,23 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     onUpdateNodes(updated);
   };
 
+  // Direct edge connection helper for context menu & toolbar
+  const handleConnectDirect = (sourceNodeId: string, targetNodeId: string) => {
+    if (sourceNodeId === targetNodeId) return;
+    const newEdge: DiagramEdge = {
+      id: `edge-${Date.now()}`,
+      sourceNodeId,
+      targetNodeId,
+      sourceAnchor: 'right',
+      targetAnchor: 'left',
+      type: 'orthogonal',
+      lineStyle: 'solid',
+      markerStart: 'none',
+      markerEnd: 'arrow',
+    };
+    onAddEdge(newEdge);
+  };
+
   // Start Resizing a node from handles
   const handleStartResize = (
     nodeId: string,
@@ -289,6 +307,16 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   // Direct Node Mouse Down for robust dragging & selection
   const handleNodeMouseDown = (nodeId: string, e: React.MouseEvent) => {
     if (e.button !== 0) return;
+
+    // If currently in connecting mode, click target node creates wire!
+    if (connectingFrom && !isReadOnly) {
+      if (connectingFrom.nodeId !== nodeId) {
+        handleConnectDirect(connectingFrom.nodeId, nodeId);
+      }
+      setConnectingFrom(null);
+      return;
+    }
+
     onSelectNode(nodeId);
     onSelectEdge(null);
 
@@ -540,9 +568,13 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     }
   };
 
-  // Keyboard shortcut listener (Delete selected node)
+  // Keyboard shortcut listener (Delete selected node, cancel connecting)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && connectingFrom) {
+        setConnectingFrom(null);
+        return;
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isReadOnly) {
         // Ensure not typing in input or textarea
         if (
@@ -558,7 +590,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, selectedEdgeId, isReadOnly, onDeleteSelected]);
+  }, [selectedNodeId, selectedEdgeId, isReadOnly, onDeleteSelected, connectingFrom]);
 
   return (
     <div
@@ -634,6 +666,39 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
             </button>
           </>
         )}
+        {/* Dedicated Connect Nodes Tool Button */}
+        {!isReadOnly && (
+          <>
+            <div className={`w-[1px] h-4 mx-1 ${themeDef.isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+            <button
+              onClick={() => {
+                if (connectingFrom) {
+                  setConnectingFrom(null);
+                } else if (selectedNodeId) {
+                  setConnectingFrom({ nodeId: selectedNodeId, anchor: 'right' });
+                } else if (nodes.length > 0) {
+                  setConnectingFrom({ nodeId: nodes[0].id, anchor: 'right' });
+                }
+              }}
+              className={`p-1.5 rounded cursor-pointer transition-colors flex items-center gap-1 ${
+                connectingFrom
+                  ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400'
+                  : themeDef.isDark
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-600'
+              }`}
+              title={
+                connectingFrom
+                  ? 'Connecting active (Click target node or click here to cancel)'
+                  : selectedNodeId
+                  ? 'Connect Selected Node to another node'
+                  : 'Connect Nodes Tool'
+              }
+            >
+              <Link2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
         {onOpenSettingsModal && (
           <>
             <div className={`w-[1px] h-4 mx-1 ${themeDef.isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
@@ -649,6 +714,25 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           </>
         )}
       </div>
+
+      {/* Floating Connecting Instructions Banner */}
+      {connectingFrom && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-blue-600 text-white px-4 py-2 rounded-xl shadow-2xl flex items-center gap-3 text-xs font-medium animate-in fade-in slide-in-from-top-3">
+          <div className="w-2.5 h-2.5 rounded-full bg-white animate-ping shrink-0" />
+          <span>
+            Connecting from{' '}
+            <strong>{nodes.find(n => n.id === connectingFrom.nodeId)?.label || 'Selected Node'}</strong>
+            : Click any target node to connect
+          </span>
+          <button
+            onClick={() => setConnectingFrom(null)}
+            className="ml-2 px-2.5 py-0.5 bg-blue-800 hover:bg-blue-900 text-white rounded text-[11px] font-mono cursor-pointer transition-colors"
+          >
+            Cancel (Esc)
+          </button>
+        </div>
+      )}
+
 
       {/* SVG Canvas Root for Lines, Connectors & Grid */}
       <svg
@@ -888,6 +972,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
       <ContextMenu
         position={contextMenu}
         selectedNode={nodes.find(n => n.id === contextMenu?.nodeId) || null}
+        otherNodes={nodes.filter(n => n.id !== contextMenu?.nodeId)}
+        theme={theme}
         onClose={() => setContextMenu(null)}
         onDeleteNode={handleDeleteNode}
         onDeleteEdge={onDeleteEdge}
@@ -906,6 +992,10 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         onToggleGridSnap={() => setGridSnap(s => !s)}
         onToggleGrid={() => setShowGrid(g => !g)}
         onOpenNewPageModal={() => onOpenNewPageModal?.()}
+        onStartConnectFromNode={nodeId => {
+          setConnectingFrom({ nodeId, anchor: 'right' });
+        }}
+        onConnectNodes={handleConnectDirect}
         isReadOnly={isReadOnly}
       />
 
