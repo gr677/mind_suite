@@ -18,6 +18,9 @@ import {
   Compass,
 } from 'lucide-react';
 
+import { ContextMenu, ContextMenuPosition } from './ContextMenu';
+import { NodeContentEditModal } from '../modals/NodeContentEditModal';
+
 interface DiagramCanvasProps {
   nodes: DiagramNode[];
   edges: DiagramEdge[];
@@ -35,6 +38,8 @@ interface DiagramCanvasProps {
   onOpenDoc: (node: DiagramNode) => void;
   onDropNewShape: (shapeTemplateId: string, canvasX: number, canvasY: number) => void;
   onUpdateNodeLabel?: (nodeId: string, label: string) => void;
+  onOpenNewPageModal?: () => void;
+  onDeleteEdge?: (edgeId: string) => void;
 }
 
 export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
@@ -54,6 +59,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   onOpenDoc,
   onDropNewShape,
   onUpdateNodeLabel,
+  onOpenNewPageModal,
+  onDeleteEdge,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -66,6 +73,10 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   // Grid & Snap options
   const [gridSnap, setGridSnap] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+
+  // Context Menu & Content Edit Modal state
+  const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
+  const [editingNodeForModal, setEditingNodeForModal] = useState<DiagramNode | null>(null);
 
   // Node Dragging state
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
@@ -92,6 +103,104 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const [currentMousePos, setCurrentMousePos] = useState({ x: 0, y: 0 });
 
   const isReadOnly = userRole === 'viewer';
+
+  // Context Menu Handlers
+  const handleNodeContextMenu = (nodeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectNode(nodeId);
+    onSelectEdge(null);
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
+  };
+
+  const handleCanvasContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId: null });
+  };
+
+  const handleDeleteNode = (nodeId: string) => {
+    onUpdateNodes(nodes.filter(n => n.id !== nodeId));
+    if (selectedNodeId === nodeId) onSelectNode(null);
+  };
+
+  const handleDuplicateNode = (nodeId: string) => {
+    const target = nodes.find(n => n.id === nodeId);
+    if (!target) return;
+    const newNode: DiagramNode = {
+      ...target,
+      id: `node-${Date.now()}`,
+      x: target.x + 30,
+      y: target.y + 30,
+      label: `${target.label} (Copy)`,
+    };
+    onUpdateNodes([...nodes, newNode]);
+    onSelectNode(newNode.id);
+  };
+
+  const handleBringToFront = (nodeId: string) => {
+    const target = nodes.find(n => n.id === nodeId);
+    if (!target) return;
+    const rest = nodes.filter(n => n.id !== nodeId);
+    onUpdateNodes([...rest, target]);
+  };
+
+  const handleSendToBack = (nodeId: string) => {
+    const target = nodes.find(n => n.id === nodeId);
+    if (!target) return;
+    const rest = nodes.filter(n => n.id !== nodeId);
+    onUpdateNodes([target, ...rest]);
+  };
+
+  const handleQuickAddColumn = (nodeId: string) => {
+    const updated = nodes.map(n => {
+      if (n.id !== nodeId) return n;
+      const currentFields = n.data?.fields || [];
+      const newField = {
+        name: `column_${currentFields.length + 1}`,
+        type: 'VARCHAR(255)',
+        isPk: false,
+        isFk: false,
+      };
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          fields: [...currentFields, newField],
+        },
+      };
+    });
+    onUpdateNodes(updated);
+  };
+
+  const handleQuickAddMethod = (nodeId: string) => {
+    const updated = nodes.map(n => {
+      if (n.id !== nodeId) return n;
+      const currentMethods = n.data?.methods || [];
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          methods: [...currentMethods, `+ method${currentMethods.length + 1}(): void`],
+        },
+      };
+    });
+    onUpdateNodes(updated);
+  };
+
+  const handleChangeColor = (nodeId: string, fill: string, stroke: string) => {
+    const updated = nodes.map(n => {
+      if (n.id !== nodeId) return n;
+      return {
+        ...n,
+        style: {
+          ...n.style,
+          fill,
+          stroke,
+        },
+      };
+    });
+    onUpdateNodes(updated);
+  };
 
   // Start Resizing a node from handles
   const handleStartResize = (
@@ -237,8 +346,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           let newWidth = resizing.initialWidth;
           let newHeight = resizing.initialHeight;
 
-          const minWidth = 80;
-          const minHeight = 40;
+          const minWidth = 40;
+          const minHeight = 35;
 
           switch (resizing.direction) {
             case 'se':
@@ -448,6 +557,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
       onMouseUp={handleMouseUp}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      onContextMenu={handleCanvasContextMenu}
     >
       {/* Interactive Floating Canvas Toolbar */}
       <div className="absolute top-4 left-6 z-30 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg p-1.5 shadow-xl backdrop-blur-md">
@@ -654,6 +764,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
             }}
             onOpenDoc={onOpenDoc}
             onUpdateLabel={onUpdateNodeLabel}
+            onNodeContextMenu={handleNodeContextMenu}
             isReadOnly={isReadOnly}
           />
         ))}
@@ -720,6 +831,41 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           />
         </div>
       </div>
+
+      {/* Right-Click Context Menu */}
+      <ContextMenu
+        position={contextMenu}
+        selectedNode={nodes.find(n => n.id === contextMenu?.nodeId) || null}
+        onClose={() => setContextMenu(null)}
+        onDeleteNode={handleDeleteNode}
+        onDeleteEdge={onDeleteEdge}
+        onDuplicateNode={handleDuplicateNode}
+        onBringToFront={handleBringToFront}
+        onSendToBack={handleSendToBack}
+        onOpenEditModal={node => setEditingNodeForModal(node)}
+        onQuickAddColumn={handleQuickAddColumn}
+        onQuickAddMethod={handleQuickAddMethod}
+        onChangeColor={handleChangeColor}
+        onOpenDoc={onOpenDoc}
+        onResetZoom={() => {
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+        }}
+        onToggleGridSnap={() => setGridSnap(s => !s)}
+        onToggleGrid={() => setShowGrid(g => !g)}
+        onOpenNewPageModal={() => onOpenNewPageModal?.()}
+        isReadOnly={isReadOnly}
+      />
+
+      {/* Direct Node Schema & Content Edit Modal */}
+      <NodeContentEditModal
+        node={editingNodeForModal}
+        isOpen={!!editingNodeForModal}
+        onClose={() => setEditingNodeForModal(null)}
+        onSaveNode={updated => {
+          onUpdateNodes(nodes.map(n => (n.id === updated.id ? updated : n)));
+        }}
+      />
     </div>
   );
 };

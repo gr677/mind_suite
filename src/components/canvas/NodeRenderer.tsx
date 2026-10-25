@@ -38,6 +38,7 @@ interface NodeRendererProps {
   onStartConnection?: (nodeId: string, anchor: 'top' | 'right' | 'bottom' | 'left', e: React.MouseEvent) => void;
   onOpenDoc?: (node: DiagramNode) => void;
   onUpdateLabel?: (nodeId: string, newLabel: string) => void;
+  onNodeContextMenu?: (nodeId: string, e: React.MouseEvent) => void;
   isReadOnly?: boolean;
 }
 
@@ -52,6 +53,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   onStartConnection,
   onOpenDoc,
   onUpdateLabel,
+  onNodeContextMenu,
   isReadOnly,
 }) => {
   const [isEditingLabel, setIsEditingLabel] = React.useState(false);
@@ -79,8 +81,13 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       // 1. ERD Entity Table
       case 'erd-entity': {
         const fields = node.data?.fields || [];
+        const fill = node.style?.fill || 'rgba(15, 23, 42, 0.95)';
+        const stroke = node.style?.stroke || '#0284c7';
         return (
-          <div className="flex flex-col h-full bg-slate-900/95 dark:bg-slate-900/95 border-2 border-sky-500/80 rounded-md shadow-xl overflow-hidden text-xs">
+          <div
+            className="flex flex-col h-full border-2 rounded-md shadow-xl overflow-hidden text-xs"
+            style={{ backgroundColor: fill, borderColor: stroke }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-1.5 bg-sky-950/80 border-b border-sky-500/40 text-sky-300 font-semibold tracking-wide">
               <div className="flex items-center gap-1.5 truncate">
@@ -198,15 +205,138 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         );
       }
 
-      // 4. BPMN / Flow Gateway (Diamond)
+      // 4. True Geometric Diamond Rhombus (ERD Relationship, Flow Decision, BPMN Gateway)
       case 'bpmn-gateway':
-      case 'flow-decision': {
+      case 'flow-decision':
+      case 'erd-relation': {
+        const isBPMN = node.type === 'bpmn-gateway';
+        const fill = node.style?.fill || (isBPMN ? '#f59e0b' : 'rgba(30, 41, 59, 0.95)');
+        const stroke = node.style?.stroke || (isBPMN ? '#d97706' : '#0ea5e9');
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+
+        // Half-dimensions for geometric rhombus:
+        // Top: (w/2, pad)
+        // Right: (w - pad, h/2)
+        // Bottom: (w/2, h - pad)
+        // Left: (pad, h/2)
+        const w = node.width;
+        const h = node.height;
+        const pad = Math.max(strokeWidth, 2);
+        const points = `${w / 2},${pad} ${w - pad},${h / 2} ${w / 2},${h - pad} ${pad},${h / 2}`;
+
         return (
-          <div className="relative w-full h-full flex items-center justify-center">
-            {/* Diamond shape using rotated square */}
-            <div className="absolute inset-1.5 rotate-45 bg-amber-600/90 border-2 border-amber-400 rounded-sm shadow-xl flex items-center justify-center" />
-            <div className="relative z-10 text-center px-2 text-white font-semibold text-[11px] leading-tight line-clamp-2">
-              {node.label}
+          <div className="relative w-full h-full flex items-center justify-center overflow-visible">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-md"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              <polygon
+                points={points}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeDasharray={node.style?.strokeDasharray}
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div className="relative z-10 text-center px-4 max-w-[80%] flex flex-col items-center justify-center pointer-events-none select-none">
+              <span
+                className="font-semibold text-xs leading-tight line-clamp-2"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+              {node.data?.relationshipType && (
+                <span className="text-[9px] font-mono opacity-80 mt-0.5 px-1.5 py-0.2 bg-black/40 rounded text-cyan-200">
+                  {node.data.relationshipType}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // Cloud Storage Bucket Shape (AWS S3, Google Cloud Storage, Azure Blob)
+      case 'cloud-bucket': {
+        const fill = node.style?.fill || 'rgba(15, 23, 42, 0.95)';
+        const stroke = node.style?.stroke || '#0284c7';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#38bdf8';
+        const w = node.width;
+        const h = node.height;
+
+        return (
+          <div className="relative w-full h-full flex flex-col items-center justify-between p-2 overflow-visible">
+            {/* SVG Bucket graphic */}
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-lg"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              {/* Arched bucket handle */}
+              <path
+                d={`M ${w * 0.25} ${h * 0.28} C ${w * 0.25} ${h * 0.04}, ${w * 0.75} ${h * 0.04}, ${w * 0.75} ${h * 0.28}`}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={Math.max(strokeWidth - 0.5, 1.5)}
+                strokeDasharray="3 2"
+              />
+              {/* Bucket Body (tapered cylinder) */}
+              <path
+                d={`M ${w * 0.12} ${h * 0.3} 
+                   C ${w * 0.12} ${h * 0.4}, ${w * 0.18} ${h * 0.85}, ${w * 0.22} ${h * 0.92}
+                   C ${w * 0.35} ${h * 0.98}, ${w * 0.65} ${h * 0.98}, ${w * 0.78} ${h * 0.92}
+                   C ${w * 0.82} ${h * 0.85}, ${w * 0.88} ${h * 0.4}, ${w * 0.88} ${h * 0.3} Z`}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
+              />
+              {/* Bucket Rim (Top Ellipse) */}
+              <ellipse
+                cx={w / 2}
+                cy={h * 0.3}
+                rx={w * 0.38}
+                ry={h * 0.11}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+              />
+              {/* Inner Rim depth */}
+              <ellipse
+                cx={w / 2}
+                cy={h * 0.3}
+                rx={w * 0.32}
+                ry={h * 0.07}
+                fill="rgba(0, 0, 0, 0.3)"
+              />
+              {/* Horizontal decorative bucket ring */}
+              <path
+                d={`M ${w * 0.16} ${h * 0.58} C ${w * 0.32} ${h * 0.66}, ${w * 0.68} ${h * 0.66}, ${w * 0.84} ${h * 0.58}`}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={1}
+                opacity={0.6}
+              />
+            </svg>
+
+            {/* Bucket Content & Label */}
+            <div className="relative z-10 w-full h-full flex flex-col items-center justify-center pt-5 px-2 text-center pointer-events-none select-none">
+              <div className="flex items-center gap-1 text-[10px] font-mono font-bold text-sky-400 bg-black/40 px-1.5 py-0.5 rounded border border-sky-500/30 mb-1">
+                <Database className="w-3 h-3" />
+                <span>{node.data?.storageClass || 'BUCKET'}</span>
+              </div>
+              <span
+                className="text-xs font-bold leading-tight line-clamp-2 max-w-[90%]"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+              {node.data?.region && (
+                <span className="text-[9px] font-mono text-slate-400 mt-0.5 truncate max-w-[85%]">
+                  {node.data.region}
+                </span>
+              )}
             </div>
           </div>
         );
@@ -462,6 +592,98 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         );
       }
 
+      // 17. Cloud Storage Bucket Shape (AWS S3, Google Cloud Storage, Azure Blob)
+      case 'cloud-bucket': {
+        const w = node.width;
+        const h = node.height;
+        const stroke = node.style?.stroke || '#06b6d4';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#e0f2fe';
+
+        const topY = Math.max(16, h * 0.25);
+        const rx = w * 0.38;
+        const ry = Math.min(14, h * 0.10);
+        const leftX = w * 0.5 - rx;
+        const rightX = w * 0.5 + rx;
+        const bottomY = h * 0.88;
+        const botRx = rx * 0.72;
+        const botLeftX = w * 0.5 - botRx;
+        const botRightX = w * 0.5 + botRx;
+        const botRy = ry * 0.8;
+
+        const bodyPath = `M ${leftX} ${topY} L ${botLeftX} ${bottomY} A ${botRx} ${botRy} 0 0 0 ${botRightX} ${bottomY} L ${rightX} ${topY} Z`;
+        const handlePath = `M ${leftX + 4} ${topY} C ${leftX} ${topY * 0.15}, ${rightX} ${topY * 0.15}, ${rightX - 4} ${topY}`;
+
+        return (
+          <div className="relative w-full h-full flex items-center justify-center overflow-visible">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-lg"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              <defs>
+                <linearGradient id={`bucket-grad-${node.id}`} x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#0891b2" stopOpacity="0.85" />
+                  <stop offset="100%" stopColor="#0e7490" stopOpacity="0.95" />
+                </linearGradient>
+              </defs>
+
+              {/* Bucket Handle */}
+              <path
+                d={handlePath}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={Math.max(1.5, strokeWidth)}
+                strokeLinecap="round"
+                className="opacity-75"
+              />
+
+              {/* Bucket Body */}
+              <path
+                d={bodyPath}
+                fill={node.style?.fill || `url(#bucket-grad-${node.id})`}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
+              />
+
+              {/* Top Rim Ellipse */}
+              <ellipse
+                cx={w * 0.5}
+                cy={topY}
+                rx={rx}
+                ry={ry}
+                fill="#164e63"
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+              />
+
+              {/* Handle Rivets */}
+              <circle cx={leftX + 3} cy={topY} r={3} fill={stroke} />
+              <circle cx={rightX - 3} cy={topY} r={3} fill={stroke} />
+            </svg>
+
+            {/* Bucket Info Overlay */}
+            <div
+              className="relative z-10 flex flex-col items-center justify-center text-center px-3 pointer-events-none select-none max-w-[85%]"
+              style={{ marginTop: `${topY * 0.45}px` }}
+            >
+              <span
+                className="font-bold text-xs leading-tight line-clamp-1 tracking-tight"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+              <span className="text-[10px] text-cyan-200/90 font-mono mt-0.5 truncate max-w-full">
+                {node.data?.bucketName || 'gs://cloud-bucket'}
+              </span>
+              <span className="text-[9px] text-cyan-300/70 font-sans uppercase tracking-wider mt-0.5">
+                {node.data?.storageClass || 'Cloud Storage'}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
       // Default Standard Flowchart Box
       default: {
         return (
@@ -512,6 +734,11 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
           setEditedLabel(node.label);
         }
       }}
+      onContextMenu={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onNodeContextMenu?.(node.id, e);
+      }}
     >
       {/* Connection Anchor Handles */}
       {renderAnchor('top', '-top-1.5 left-1/2 -translate-x-1/2')}
@@ -522,41 +749,71 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       {/* Render Node Body */}
       {renderNodeBody()}
 
-      {/* Interactive Resize Handles (Rendered when node is selected) */}
+      {/* Hover Description Tooltip */}
+      {(node.documentation?.description || (node.stickyNotes && node.stickyNotes.length > 0)) && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col w-64 p-2.5 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-200 pointer-events-none z-50 backdrop-blur-md animate-in fade-in zoom-in-95">
+          <div className="flex items-center justify-between font-mono text-[9px] text-sky-400 border-b border-slate-800 pb-1 mb-1">
+            <span className="font-bold truncate">{node.label}</span>
+            <span className="uppercase px-1 py-0.2 bg-slate-800 rounded text-slate-400">{node.type}</span>
+          </div>
+          {node.documentation?.description && (
+            <p className="text-slate-300 leading-relaxed line-clamp-3">
+              {node.documentation.description}
+            </p>
+          )}
+          {node.documentation?.tags && node.documentation.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {node.documentation.tags.map((t, idx) => (
+                <span key={idx} className="px-1.5 py-0.2 bg-blue-500/15 text-blue-300 rounded text-[9px] font-mono">
+                  #{t}
+                </span>
+              ))}
+            </div>
+          )}
+          {node.stickyNotes && node.stickyNotes.length > 0 && (
+            <div className="mt-1.5 pt-1 border-t border-slate-800/80 text-[10px] text-amber-300 font-mono flex items-center gap-1">
+              <span>★ {node.stickyNotes.length} sticky note{node.stickyNotes.length === 1 ? '' : 's'}</span>
+            </div>
+          )}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-700" />
+        </div>
+      )}
+
+      {/* Interactive Resize Handles (Corner & Edge handles rendered when node is selected) */}
       {isSelected && !isReadOnly && (
         <>
           {/* Corner Handles */}
           <div
-            className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nwse-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-sm shadow-md cursor-nwse-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
             onMouseDown={e => {
               e.stopPropagation();
               onStartResize?.(node.id, 'nw', e);
             }}
-            title="Resize node"
+            title="Drag corner to resize"
           />
           <div
-            className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nesw-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-sm shadow-md cursor-nesw-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
             onMouseDown={e => {
               e.stopPropagation();
               onStartResize?.(node.id, 'ne', e);
             }}
-            title="Resize node"
+            title="Drag corner to resize"
           />
           <div
-            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nesw-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-sm shadow-md cursor-nesw-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
             onMouseDown={e => {
               e.stopPropagation();
               onStartResize?.(node.id, 'sw', e);
             }}
-            title="Resize node"
+            title="Drag corner to resize"
           />
           <div
-            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-blue-500 rounded-sm shadow-md cursor-nwse-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
+            className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-blue-600 rounded-sm shadow-md cursor-nwse-resize z-40 pointer-events-auto hover:scale-125 transition-transform"
             onMouseDown={e => {
               e.stopPropagation();
               onStartResize?.(node.id, 'se', e);
             }}
-            title="Resize node"
+            title="Drag corner to resize"
           />
 
           {/* Edge Handles */}

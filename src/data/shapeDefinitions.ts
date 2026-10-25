@@ -57,19 +57,24 @@ export const SHAPE_TEMPLATES: ShapeTemplate[] = [
     categoryLabel: 'Entity Relationship (ERD)',
     name: 'Relationship Diamond',
     iconName: 'Diamond',
-    description: 'Associative entity or relationship',
+    description: 'Associative entity or relationship diamond',
     defaultNode: {
-      type: 'flow-decision',
+      type: 'erd-relation',
       label: 'Relates To',
       width: 140,
       height: 90,
       style: {
-        fill: 'rgba(30, 41, 59, 0.9)',
+        fill: 'rgba(30, 41, 59, 0.95)',
         stroke: '#0ea5e9',
         strokeWidth: 2,
         textColor: '#e0f2fe',
       },
       data: { relationshipType: 'many-to-many' },
+      documentation: {
+        description: 'Cardinal relationship or associative entity in ERD.',
+        tags: ['ERD', 'Relationship'],
+        status: 'draft',
+      },
     },
   },
 
@@ -650,6 +655,36 @@ export const SHAPE_TEMPLATES: ShapeTemplate[] = [
       data: { c4Type: 'container' },
     },
   },
+  {
+    id: 'cloud-storage-bucket',
+    category: 'c4',
+    categoryLabel: 'C4 & Cloud Architecture',
+    name: 'Cloud Storage Bucket',
+    iconName: 'Database',
+    description: 'Object storage bucket (AWS S3, Google Cloud Storage, Azure Blob)',
+    defaultNode: {
+      type: 'cloud-bucket',
+      label: 'cloud-storage-bucket',
+      width: 130,
+      height: 120,
+      style: {
+        fill: 'rgba(15, 23, 42, 0.95)',
+        stroke: '#0284c7',
+        strokeWidth: 2,
+        textColor: '#38bdf8',
+        rounded: 8,
+      },
+      data: {
+        storageClass: 'Standard S3',
+        region: 'us-east-1 (Cloud Storage)',
+      },
+      documentation: {
+        description: 'Scalable cloud object storage bucket for binary assets, documents, and logs.',
+        tags: ['Cloud', 'S3', 'GCS', 'Storage', 'Bucket'],
+        status: 'approved',
+      },
+    },
+  },
 
   // 12. Mind Map
   {
@@ -765,6 +800,39 @@ export const SHAPE_TEMPLATES: ShapeTemplate[] = [
         textColor: '#ffffff',
       },
       data: {},
+    },
+  },
+
+  // Cloud & Object Storage Bucket
+  {
+    id: 'cloud-storage-bucket',
+    category: 'c4',
+    categoryLabel: 'Cloud & Infrastructure',
+    name: 'Cloud Storage Bucket',
+    iconName: 'Archive',
+    description: 'Object storage bucket (AWS S3, Google Cloud Storage, Azure Blob)',
+    defaultNode: {
+      type: 'cloud-bucket',
+      label: 'asset-storage-bucket',
+      width: 150,
+      height: 120,
+      style: {
+        fill: 'rgba(14, 116, 144, 0.9)',
+        stroke: '#06b6d4',
+        strokeWidth: 2,
+        textColor: '#e0f2fe',
+        rounded: 8,
+      },
+      data: {
+        bucketName: 'gs://production-assets-bucket',
+        storageClass: 'Standard S3 / GCS',
+        region: 'us-central1',
+      },
+      documentation: {
+        description: 'Cloud object storage bucket for blob, media, and archive storage.',
+        tags: ['Cloud', 'Storage', 'Bucket', 'S3', 'GCS'],
+        status: 'draft',
+      },
     },
   },
 

@@ -28,6 +28,8 @@ import { OfflineSyncModal } from './components/modals/OfflineSyncModal';
 import { NewPageModal } from './components/modals/NewPageModal';
 import { DiagramTypesGalleryModal } from './components/modals/DiagramTypesGalleryModal';
 import { GitHubPublishModal } from './components/modals/GitHubPublishModal';
+import { WorkspaceModal } from './components/modals/WorkspaceModal';
+import { workspaceService } from './services/workspaceService';
 import { getExampleDiagramForType } from './data/diagramExamples';
 
 export default function App() {
@@ -62,6 +64,8 @@ export default function App() {
   const [isRestApiModalOpen, setIsRestApiModalOpen] = useState(false);
   const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
   const [isNewPageModalOpen, setIsNewPageModalOpen] = useState(false);
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [activeWs, setActiveWs] = useState(() => workspaceService.getActiveWorkspace());
 
   // Real-time Collaboration & Network Status
   const [collaborators, setCollaborators] = useState<Collaborator[]>(() =>
@@ -106,9 +110,14 @@ export default function App() {
       setCollaborators(collaborationService.getCollaborators());
     });
 
+    const unsubWs = workspaceService.subscribe(() => {
+      setActiveWs({ ...workspaceService.getActiveWorkspace() });
+    });
+
     return () => {
       unsubOffline();
       unsubCollab();
+      unsubWs();
     };
   }, []);
 
@@ -122,6 +131,7 @@ export default function App() {
             const data: DiagramDocument = await res.json();
             setDocument(data);
             offlineSyncService.cacheDocument(data);
+            workspaceService.saveCurrentDiagram(data);
           }
         } catch (err) {
           console.warn('Using offline cached document on startup:', err);
@@ -135,6 +145,7 @@ export default function App() {
   const persistDocument = useCallback((updatedDoc: DiagramDocument) => {
     setDocument(updatedDoc);
     offlineSyncService.cacheDocument(updatedDoc);
+    workspaceService.saveCurrentDiagram(updatedDoc);
 
     if (offlineSyncService.isOnline()) {
       fetch(`/api/diagrams/${updatedDoc.id}`, {
@@ -414,6 +425,34 @@ export default function App() {
     [document, persistDocument]
   );
 
+  const handleDeleteEdge = useCallback(
+    (edgeId: string) => {
+      const updatedPages = document.pages.map(p => {
+        if (p.id !== currentPage.id) return p;
+        return {
+          ...p,
+          edges: p.edges.filter(e => e.id !== edgeId),
+        };
+      });
+      persistDocument({ ...document, pages: updatedPages });
+      if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
+    },
+    [document, currentPage, persistDocument, selectedEdgeId]
+  );
+
+  const handleLoadWorkspaceDiagram = useCallback(
+    (doc: DiagramDocument) => {
+      setDocument(doc);
+      offlineSyncService.cacheDocument(doc);
+      if (doc.pages && doc.pages.length > 0) {
+        setActivePageId(doc.activePageId || doc.pages[0].id);
+      }
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+    },
+    []
+  );
+
   return (
     <div className={`w-screen h-screen flex flex-col overflow-hidden ${theme === 'dark' ? 'dark bg-slate-950' : 'bg-slate-100'}`}>
       {/* Top Application Header with Breadcrumbs, RBAC & Status */}
@@ -425,6 +464,9 @@ export default function App() {
         isOnline={isOnline}
         queuedCount={syncQueue.length}
         theme={theme}
+        activeWorkspaceName={activeWs.name}
+        activeDiagramFilename={activeWs.activeDiagramFilename}
+        onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         onSelectPage={pageId => {
           setActivePageId(pageId);
           setSelectedNodeId(null);
@@ -486,6 +528,8 @@ export default function App() {
             setIsInspectorOpen(true);
           }}
           onDropNewShape={handleDropNewShape}
+          onOpenNewPageModal={() => setIsNewPageModalOpen(true)}
+          onDeleteEdge={handleDeleteEdge}
           onUpdateNodeLabel={(nodeId, label) => {
             const targetNode = currentPage.nodes.find(n => n.id === nodeId);
             if (targetNode) {
@@ -567,6 +611,12 @@ export default function App() {
         onClose={() => setIsNewPageModalOpen(false)}
         pages={document.pages}
         onCreatePage={handleCreatePage}
+      />
+
+      <WorkspaceModal
+        isOpen={isWorkspaceModalOpen}
+        onClose={() => setIsWorkspaceModalOpen(false)}
+        onLoadDiagram={handleLoadWorkspaceDiagram}
       />
     </div>
   );

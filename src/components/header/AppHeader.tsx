@@ -22,6 +22,8 @@ import {
   ExternalLink,
   Download,
   Github,
+  Folder,
+  HardDrive,
 } from 'lucide-react';
 
 interface AppHeaderProps {
@@ -32,6 +34,9 @@ interface AppHeaderProps {
   isOnline: boolean;
   queuedCount: number;
   theme: 'dark' | 'light';
+  activeWorkspaceName?: string;
+  activeDiagramFilename?: string;
+  onOpenWorkspaceModal: () => void;
   onSelectPage: (pageId: string) => void;
   onOpenNewPageModal: () => void;
   onOpenGallery: () => void;
@@ -51,6 +56,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   isOnline,
   queuedCount,
   theme,
+  activeWorkspaceName,
+  activeDiagramFilename,
+  onOpenWorkspaceModal,
   onSelectPage,
   onOpenNewPageModal,
   onOpenGallery,
@@ -102,6 +110,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         >
           <Layers className="w-3.5 h-3.5" />
           <span>Diagram Types (19)</span>
+        </button>
+
+        {/* Workspace Storage Path Pill (Change 4: c:/omnimind/data/workspace1/diagram1.json) */}
+        <button
+          onClick={onOpenWorkspaceModal}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-850 text-slate-300 hover:text-white text-xs font-mono transition-all cursor-pointer shadow-sm group shrink-0"
+          title={`Click to manage workspaces & diagrams (c:/omnimind/data/${activeWorkspaceName || 'workspace1'}/${activeDiagramFilename || 'diagram1.json'})`}
+        >
+          <Folder className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+          <span className="text-slate-500 hidden xl:inline">c:/omnimind/data/</span>
+          <span className="text-amber-300 font-bold">{activeWorkspaceName || 'workspace1'}</span>
+          <span className="text-slate-500">/</span>
+          <span className="text-sky-300 font-bold">{activeDiagramFilename || 'diagram1.json'}</span>
         </button>
 
         {/* Current Diagram Type Badge */}
