@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { DiagramNode, DiagramPage, StickyNote, Comment, UserRole } from '../../types/diagram';
+import { DiagramNode, DiagramPage, StickyNote, Comment, UserRole, AppTheme } from '../../types/diagram';
 import {
   FileText,
   Sliders,
@@ -26,12 +26,14 @@ import {
   Cpu,
   FolderOpen,
 } from 'lucide-react';
+import { THEMES } from '../../utils/themeConfig';
 
 interface NodeInspectorProps {
   selectedNode: DiagramNode | null;
   currentPage: DiagramPage;
   allPages: DiagramPage[];
   userRole: UserRole;
+  theme?: AppTheme;
   onUpdateNode: (updatedNode: DiagramNode) => void;
   onDeleteNode: (nodeId: string) => void;
   onClose: () => void;
@@ -43,6 +45,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   currentPage,
   allPages,
   userRole,
+  theme = 'dark',
   onUpdateNode,
   onDeleteNode,
   onClose,
@@ -54,10 +57,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const [newStickyText, setNewStickyText] = useState('');
   const [stickyColor, setStickyColor] = useState<StickyNote['color']>('yellow');
 
+  const themeDef = THEMES[theme] || THEMES.dark;
+
   if (!selectedNode) {
     // Show Page Overview Inspector
     return (
-      <div className="w-80 h-full bg-slate-900 border-l border-slate-800 flex flex-col text-slate-200 select-none">
+      <div className={`w-80 h-full border-l flex flex-col select-none transition-colors duration-150 ${themeDef.sidebarClass}`}>
         <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-400" />
@@ -164,7 +169,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   };
 
   return (
-    <div className="w-80 h-full bg-slate-900 border-l border-slate-800 flex flex-col text-slate-200 select-none">
+    <div className={`w-80 h-full border-l flex flex-col select-none transition-colors duration-150 ${themeDef.sidebarClass}`}>
       {/* Inspector Header */}
       <div className="p-3 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2 truncate">

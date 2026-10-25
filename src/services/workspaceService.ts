@@ -129,6 +129,11 @@ class WorkspaceService {
     return ws;
   }
 
+  public getActiveWorkspacePath(): string {
+    const ws = this.getActiveWorkspace();
+    return `${ws.basePath}/${ws.name}/${ws.activeDiagramFilename}`;
+  }
+
   public getActiveDiagram(): WorkspaceDiagram {
     const ws = this.getActiveWorkspace();
     let diag = ws.diagrams[ws.activeDiagramFilename];

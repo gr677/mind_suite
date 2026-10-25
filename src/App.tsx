@@ -13,6 +13,8 @@ import {
   UserRole,
   SyncQueueItem,
   DiagramType,
+  AppTheme,
+  StudioSettings,
 } from './types/diagram';
 import { initialDiagramDocument } from './data/seedDiagrams';
 import { SHAPE_TEMPLATES } from './data/shapeDefinitions';
@@ -29,8 +31,10 @@ import { NewPageModal } from './components/modals/NewPageModal';
 import { DiagramTypesGalleryModal } from './components/modals/DiagramTypesGalleryModal';
 import { GitHubPublishModal } from './components/modals/GitHubPublishModal';
 import { WorkspaceModal } from './components/modals/WorkspaceModal';
+import { SettingsModal } from './components/modals/SettingsModal';
 import { workspaceService } from './services/workspaceService';
 import { getExampleDiagramForType } from './data/diagramExamples';
+import { THEMES } from './utils/themeConfig';
 
 export default function App() {
   // Document state
@@ -65,6 +69,8 @@ export default function App() {
   const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
   const [isNewPageModalOpen, setIsNewPageModalOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [activeWs, setActiveWs] = useState(() => workspaceService.getActiveWorkspace());
 
   // Real-time Collaboration & Network Status
@@ -78,7 +84,56 @@ export default function App() {
   const [syncQueue, setSyncQueue] = useState<SyncQueueItem[]>(() =>
     offlineSyncService.getQueue()
   );
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // Studio Settings (Themes, Grid, Auto-Save, Shortcuts)
+  const [settings, setSettings] = useState<StudioSettings>(() => {
+    try {
+      const saved = localStorage.getItem('omnimind_settings_v1');
+      if (saved) return JSON.parse(saved);
+      const oldTheme = localStorage.getItem('omnimodel_theme');
+      if (oldTheme) {
+        return {
+          theme: oldTheme as AppTheme,
+          gridStyle: 'dots',
+          gridSize: 24,
+          snapToGrid: true,
+          showHoverTooltips: true,
+          showCollaborators: false,
+          autoSaveInterval: 'instant',
+          defaultConnectorType: 'orthogonal',
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      theme: 'dark',
+      gridStyle: 'dots',
+      gridSize: 24,
+      snapToGrid: true,
+      showHoverTooltips: true,
+      showCollaborators: false,
+      autoSaveInterval: 'instant',
+      defaultConnectorType: 'orthogonal',
+    };
+  });
+
+  const currentThemeDef = THEMES[settings.theme] || THEMES.dark;
+
+  useEffect(() => {
+    if (currentThemeDef.isDark) {
+      window.document.documentElement.classList.add('dark');
+      window.document.documentElement.style.colorScheme = 'dark';
+    } else {
+      window.document.documentElement.classList.remove('dark');
+      window.document.documentElement.style.colorScheme = 'light';
+    }
+    try {
+      localStorage.setItem('omnimind_settings_v1', JSON.stringify(settings));
+    } catch {
+      // ignore
+    }
+  }, [settings, currentThemeDef]);
 
   // Active page accessor
   const currentPage =
@@ -453,8 +508,53 @@ export default function App() {
     []
   );
 
+  const handleUpdateSettings = useCallback((newSettings: StudioSettings) => {
+    setSettings(newSettings);
+    try {
+      localStorage.setItem('omnimind_settings_v1', JSON.stringify(newSettings));
+    } catch (e) {
+      console.error('Failed to save settings to localStorage:', e);
+    }
+  }, []);
+
+  const handleManualSave = useCallback(() => {
+    setSaveStatus('saving');
+    persistDocument(document);
+    workspaceService.saveCurrentDiagram(document);
+    collaborationService.addActivity(
+      'You',
+      '#10b981',
+      `Saved diagram to ${activeWs.name}/${activeWs.activeDiagramFilename}`
+    );
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 2500);
+  }, [document, persistDocument, activeWs]);
+
+  const handleToggleTheme = useCallback(() => {
+    const themeKeys: AppTheme[] = ['dark', 'light', 'cyberpunk', 'parchment', 'nord', 'monochrome'];
+    const nextIdx = (themeKeys.indexOf(settings.theme) + 1) % themeKeys.length;
+    handleUpdateSettings({ ...settings, theme: themeKeys[nextIdx] });
+  }, [settings, handleUpdateSettings]);
+
+  // Global Ctrl+S keyboard shortcut to save diagram
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleManualSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleManualSave]);
+
   return (
-    <div className={`w-screen h-screen flex flex-col overflow-hidden ${theme === 'dark' ? 'dark bg-slate-950' : 'bg-slate-100'}`}>
+    <div
+      className={`w-screen h-screen flex flex-col overflow-hidden transition-colors duration-200 ${
+        currentThemeDef.isDark ? 'dark' : ''
+      }`}
+      style={{ backgroundColor: currentThemeDef.canvasBg }}
+    >
       {/* Top Application Header with Breadcrumbs, RBAC & Status */}
       <AppHeader
         document={document}
@@ -463,10 +563,13 @@ export default function App() {
         userRole={userRole}
         isOnline={isOnline}
         queuedCount={syncQueue.length}
-        theme={theme}
+        theme={settings.theme}
+        saveStatus={saveStatus}
         activeWorkspaceName={activeWs.name}
         activeDiagramFilename={activeWs.activeDiagramFilename}
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        onManualSave={handleManualSave}
         onSelectPage={pageId => {
           setActivePageId(pageId);
           setSelectedNodeId(null);
@@ -479,7 +582,7 @@ export default function App() {
         onOpenRestApiModal={() => setIsRestApiModalOpen(true)}
         onOpenOfflineModal={() => setIsOfflineModalOpen(true)}
         onChangeRole={setUserRole}
-        onToggleTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Studio Body: Sidebar + Canvas + Inspector */}
@@ -489,6 +592,7 @@ export default function App() {
           currentDiagramType={currentPage.diagramType}
           userRole={userRole}
           selectedCategory={selectedCategory}
+          theme={settings.theme}
           onSelectCategory={cat => {
             if (cat === 'all' || cat === 'notes' || cat === 'containers') {
               setSelectedCategory(cat);
@@ -510,7 +614,8 @@ export default function App() {
           selectedNodeId={selectedNodeId}
           selectedEdgeId={selectedEdgeId}
           userRole={userRole}
-          theme={theme}
+          theme={settings.theme}
+          settings={settings}
           onSelectNode={nodeId => {
             setSelectedNodeId(nodeId);
             if (nodeId) setIsInspectorOpen(true);
@@ -530,6 +635,7 @@ export default function App() {
           onDropNewShape={handleDropNewShape}
           onOpenNewPageModal={() => setIsNewPageModalOpen(true)}
           onDeleteEdge={handleDeleteEdge}
+          onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
           onUpdateNodeLabel={(nodeId, label) => {
             const targetNode = currentPage.nodes.find(n => n.id === nodeId);
             if (targetNode) {
@@ -545,6 +651,7 @@ export default function App() {
             currentPage={currentPage}
             allPages={document.pages}
             userRole={userRole}
+            theme={settings.theme}
             onUpdateNode={handleUpdateSingleNode}
             onDeleteNode={handleDeleteNode}
             onClose={() => setIsInspectorOpen(false)}
@@ -617,6 +724,17 @@ export default function App() {
         isOpen={isWorkspaceModalOpen}
         onClose={() => setIsWorkspaceModalOpen(false)}
         onLoadDiagram={handleLoadWorkspaceDiagram}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        settings={settings}
+        onUpdateSettings={handleUpdateSettings}
+        document={document}
+        activeWorkspacePath={workspaceService.getActiveWorkspacePath()}
+        onManualSave={handleManualSave}
+        onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
       />
     </div>
   );

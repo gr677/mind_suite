@@ -152,6 +152,27 @@ export interface DiagramVersion {
   };
 }
 
+export type AppTheme =
+  | 'dark'
+  | 'light'
+  | 'cyberpunk'
+  | 'parchment'
+  | 'nord'
+  | 'monochrome';
+
+export type GridStyle = 'dots' | 'lines' | 'crosshairs' | 'none';
+
+export interface StudioSettings {
+  theme: AppTheme;
+  gridStyle: GridStyle;
+  gridSize: number;
+  snapToGrid: boolean;
+  showHoverTooltips: boolean;
+  showCollaborators: boolean;
+  autoSaveInterval: 'instant' | '30s' | 'manual';
+  defaultConnectorType: 'orthogonal' | 'curved' | 'straight';
+}
+
 export interface DiagramDocument {
   id: string;
   name: string;
@@ -163,7 +184,7 @@ export interface DiagramDocument {
   settings: {
     gridSnap: boolean;
     showGrid: boolean;
-    theme: 'dark' | 'light';
+    theme: AppTheme;
     showMinimap: boolean;
   };
 }

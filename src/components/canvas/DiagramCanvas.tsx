@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { DiagramNode, DiagramEdge, Collaborator, UserRole } from '../../types/diagram';
+import { DiagramNode, DiagramEdge, Collaborator, UserRole, AppTheme, StudioSettings } from '../../types/diagram';
 import { NodeRenderer } from './NodeRenderer';
 import { EdgeRenderer } from './EdgeRenderer';
 import {
@@ -16,10 +16,12 @@ import {
   Trash2,
   Plus,
   Compass,
+  Settings,
 } from 'lucide-react';
 
 import { ContextMenu, ContextMenuPosition } from './ContextMenu';
 import { NodeContentEditModal } from '../modals/NodeContentEditModal';
+import { THEMES } from '../../utils/themeConfig';
 
 interface DiagramCanvasProps {
   nodes: DiagramNode[];
@@ -28,7 +30,8 @@ interface DiagramCanvasProps {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   userRole: UserRole;
-  theme: 'dark' | 'light';
+  theme: AppTheme;
+  settings?: StudioSettings;
   onSelectNode: (nodeId: string | null) => void;
   onSelectEdge: (edgeId: string | null) => void;
   onUpdateNodes: (nodes: DiagramNode[]) => void;
@@ -40,6 +43,7 @@ interface DiagramCanvasProps {
   onUpdateNodeLabel?: (nodeId: string, label: string) => void;
   onOpenNewPageModal?: () => void;
   onDeleteEdge?: (edgeId: string) => void;
+  onOpenSettingsModal?: () => void;
 }
 
 export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
@@ -50,6 +54,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   selectedEdgeId,
   userRole,
   theme,
+  settings,
   onSelectNode,
   onSelectEdge,
   onUpdateNodes,
@@ -61,8 +66,10 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   onUpdateNodeLabel,
   onOpenNewPageModal,
   onDeleteEdge,
+  onOpenSettingsModal,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const themeDef = THEMES[theme] || THEMES.dark;
 
   // Viewport transformation
   const [zoom, setZoom] = useState(1);
@@ -71,8 +78,15 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Grid & Snap options
-  const [gridSnap, setGridSnap] = useState(true);
+  const [gridSnap, setGridSnap] = useState(settings?.snapToGrid ?? true);
   const [showGrid, setShowGrid] = useState(true);
+
+  // Sync snap with settings
+  useEffect(() => {
+    if (settings) {
+      setGridSnap(settings.snapToGrid);
+    }
+  }, [settings?.snapToGrid]);
 
   // Context Menu & Content Edit Modal state
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
@@ -550,7 +564,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
     <div
       ref={containerRef}
       id="canvas-container"
-      className="relative flex-1 w-full h-full overflow-hidden bg-slate-950 select-none cursor-default"
+      className="relative flex-1 w-full h-full overflow-hidden select-none cursor-default transition-colors duration-200"
+      style={{ backgroundColor: themeDef.canvasBg }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -560,31 +575,31 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
       onContextMenu={handleCanvasContextMenu}
     >
       {/* Interactive Floating Canvas Toolbar */}
-      <div className="absolute top-4 left-6 z-30 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg p-1.5 shadow-xl backdrop-blur-md">
+      <div className={`absolute top-4 left-6 z-30 flex items-center gap-1.5 rounded-lg p-1.5 shadow-xl backdrop-blur-md border ${themeDef.panelClass}`}>
         <button
           onClick={() => setZoom(z => Math.max(z - 0.15, 0.4))}
-          className="p-1.5 hover:bg-slate-800 text-slate-300 rounded cursor-pointer transition-colors"
+          className={`p-1.5 rounded cursor-pointer transition-colors ${themeDef.isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <span className="text-xs font-mono text-slate-300 px-1 min-w-[45px] text-center">
+        <span className={`text-xs font-mono px-1 min-w-[45px] text-center ${themeDef.textPrimaryClass}`}>
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={() => setZoom(z => Math.min(z + 0.15, 2.2))}
-          className="p-1.5 hover:bg-slate-800 text-slate-300 rounded cursor-pointer transition-colors"
+          className={`p-1.5 rounded cursor-pointer transition-colors ${themeDef.isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <div className="w-[1px] h-4 bg-slate-700 mx-1" />
+        <div className={`w-[1px] h-4 mx-1 ${themeDef.isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
         <button
           onClick={() => {
             setZoom(1);
             setPan({ x: 0, y: 0 });
           }}
-          className="p-1.5 hover:bg-slate-800 text-slate-300 rounded cursor-pointer transition-colors"
+          className={`p-1.5 rounded cursor-pointer transition-colors ${themeDef.isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
           title="Reset View (100%)"
         >
           <Maximize2 className="w-4 h-4" />
@@ -592,7 +607,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         <button
           onClick={() => setShowGrid(g => !g)}
           className={`p-1.5 rounded cursor-pointer transition-colors ${
-            showGrid ? 'bg-blue-600/30 text-blue-400' : 'hover:bg-slate-800 text-slate-400'
+            showGrid ? 'bg-blue-600/30 text-blue-400' : themeDef.isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
           }`}
           title="Toggle Canvas Grid"
         >
@@ -601,7 +616,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         <button
           onClick={() => setGridSnap(s => !s)}
           className={`p-1.5 rounded cursor-pointer transition-colors ${
-            gridSnap ? 'bg-emerald-600/30 text-emerald-400' : 'hover:bg-slate-800 text-slate-400'
+            gridSnap ? 'bg-emerald-600/30 text-emerald-400' : themeDef.isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
           }`}
           title="Toggle Grid Snapping"
         >
@@ -609,13 +624,27 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         </button>
         {selectedNodeId && !isReadOnly && (
           <>
-            <div className="w-[1px] h-4 bg-slate-700 mx-1" />
+            <div className={`w-[1px] h-4 mx-1 ${themeDef.isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
             <button
               onClick={onDeleteSelected}
               className="p-1.5 hover:bg-rose-500/20 text-rose-400 rounded cursor-pointer transition-colors"
               title="Delete Selected Shape (Del)"
             >
               <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
+        {onOpenSettingsModal && (
+          <>
+            <div className={`w-[1px] h-4 mx-1 ${themeDef.isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+            <button
+              onClick={onOpenSettingsModal}
+              className={`p-1.5 rounded cursor-pointer transition-colors ${
+                themeDef.isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+              }`}
+              title="Studio Settings & Themes"
+            >
+              <Settings className="w-4 h-4" />
             </button>
           </>
         )}
@@ -631,14 +660,32 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         }}
       >
         <defs>
-          {/* Dot Grid Pattern */}
+          {/* Dynamic Grid Pattern */}
           <pattern
             id="canvas-dot-grid"
-            width="24"
-            height="24"
+            width={settings?.gridSize || 24}
+            height={settings?.gridSize || 24}
             patternUnits="userSpaceOnUse"
           >
-            <circle cx="2" cy="2" r="1.2" fill={showGrid ? '#334155' : 'transparent'} />
+            {showGrid && (settings?.gridStyle || 'dots') === 'dots' && (
+              <circle cx="2" cy="2" r="1.2" fill={themeDef.canvasDotColor} />
+            )}
+            {showGrid && settings?.gridStyle === 'lines' && (
+              <path
+                d={`M ${settings.gridSize || 24} 0 L 0 0 0 ${settings.gridSize || 24}`}
+                fill="none"
+                stroke={themeDef.canvasLineColor}
+                strokeWidth="1"
+              />
+            )}
+            {showGrid && settings?.gridStyle === 'crosshairs' && (
+              <path
+                d={`M 0 3 L 0 -3 M -3 0 L 3 0`}
+                fill="none"
+                stroke={themeDef.canvasDotColor}
+                strokeWidth="1"
+              />
+            )}
           </pattern>
 
           {/* Standard Arrow Marker */}
@@ -769,44 +816,49 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           />
         ))}
 
-        {/* Real-Time Live Collaborator Cursors (Hidden for now as requested) */}
-        {/*
-        {collaborators.map(c => {
-          if (!c.cursorPosition) return null;
-          return (
-            <div
-              key={c.id}
-              className="absolute pointer-events-none transition-all duration-300 ease-out z-40"
-              style={{
-                left: `${c.cursorPosition.x}px`,
-                top: `${c.cursorPosition.y}px`,
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={c.color}>
-                <path d="M5.5 3.2L18.4 12.8L12.2 14.1L8.8 20.8L5.5 3.2Z" stroke="#ffffff" strokeWidth="1.5" />
-              </svg>
+        {/* Real-Time Live Collaborator Cursors (Configured in Settings) */}
+        {settings?.showCollaborators &&
+          collaborators.map(c => {
+            if (!c.cursorPosition) return null;
+            return (
               <div
-                className="mt-1 px-2 py-0.5 rounded text-[10px] font-semibold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5"
-                style={{ backgroundColor: c.color }}
+                key={c.id}
+                className="absolute pointer-events-none transition-all duration-300 ease-out z-40"
+                style={{
+                  left: `${c.cursorPosition.x}px`,
+                  top: `${c.cursorPosition.y}px`,
+                }}
               >
-                <span>{c.name}</span>
-                {c.lastAction && (
-                  <span className="opacity-80 font-normal">· {c.lastAction}</span>
-                )}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill={c.color}>
+                  <path d="M5.5 3.2L18.4 12.8L12.2 14.1L8.8 20.8L5.5 3.2Z" stroke="#ffffff" strokeWidth="1.5" />
+                </svg>
+                <div
+                  className="mt-1 px-2 py-0.5 rounded text-[10px] font-semibold text-white whitespace-nowrap shadow-lg flex items-center gap-1.5"
+                  style={{ backgroundColor: c.color }}
+                >
+                  <span>{c.name}</span>
+                  {c.lastAction && (
+                    <span className="opacity-80 font-normal">· {c.lastAction}</span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-        */}
+            );
+          })}
       </div>
 
       {/* Bottom-Right Minimap Indicator */}
-      <div className="absolute bottom-4 right-4 z-30 bg-slate-900/90 border border-slate-800 rounded-lg p-2 shadow-xl backdrop-blur-md hidden sm:block">
+      <div className={`absolute bottom-4 right-4 z-30 rounded-lg p-2 shadow-xl backdrop-blur-md border hidden sm:block ${themeDef.panelClass}`}>
         <div className="flex items-center gap-1.5 pb-1 text-[10px] font-mono text-slate-400">
           <Compass className="w-3 h-3 text-blue-400" />
           <span>MINIMAP</span>
         </div>
-        <div className="w-32 h-20 bg-slate-950 border border-slate-800 rounded relative overflow-hidden">
+        <div
+          className="w-32 h-20 rounded relative overflow-hidden border"
+          style={{
+            backgroundColor: themeDef.canvasBg,
+            borderColor: themeDef.isDark ? '#334155' : '#cbd5e1',
+          }}
+        >
           {nodes.map(n => (
             <div
               key={n.id}

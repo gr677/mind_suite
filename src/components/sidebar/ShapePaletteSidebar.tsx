@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { SHAPE_TEMPLATES } from '../../data/shapeDefinitions';
-import { DiagramType, UserRole } from '../../types/diagram';
+import { DiagramType, UserRole, AppTheme } from '../../types/diagram';
 import {
   Search,
   Table,
@@ -31,11 +31,13 @@ import {
   BookOpen,
   Archive,
 } from 'lucide-react';
+import { THEMES } from '../../utils/themeConfig';
 
 interface ShapePaletteSidebarProps {
   currentDiagramType: DiagramType;
   userRole: UserRole;
   selectedCategory: string;
+  theme?: AppTheme;
   onSelectCategory: (cat: string) => void;
   onSelectTemplate: (templateId: string) => void;
   onOpenGallery: () => void;
@@ -45,6 +47,7 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
   currentDiagramType,
   userRole,
   selectedCategory,
+  theme = 'dark',
   onSelectCategory,
   onSelectTemplate,
   onOpenGallery,
@@ -122,19 +125,20 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
   };
 
   const isReadOnly = userRole === 'viewer';
+  const themeDef = THEMES[theme || 'dark'] || THEMES.dark;
 
   return (
-    <div className="w-64 h-full bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 text-slate-200 select-none">
+    <div className={`w-64 h-full border-r flex flex-col shrink-0 select-none transition-colors duration-150 ${themeDef.sidebarClass}`}>
       {/* Sidebar Header */}
-      <div className="p-3 border-b border-slate-800 space-y-2.5">
+      <div className={`p-3 border-b space-y-2.5 ${themeDef.borderClass}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400">
               <Grid className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100">Shape Library</h2>
-              <p className="text-[10px] text-slate-400">Drag &amp; drop onto canvas</p>
+              <h2 className={`text-xs font-bold uppercase tracking-wider ${themeDef.textPrimaryClass}`}>Shape Library</h2>
+              <p className={`text-[10px] ${themeDef.textMutedClass}`}>Drag &amp; drop onto canvas</p>
             </div>
           </div>
           {isReadOnly && (
@@ -164,19 +168,27 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
             placeholder="Search shapes across all types..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md pl-8 pr-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+            className={`w-full rounded-md pl-8 pr-2.5 py-1 text-xs focus:outline-none focus:border-blue-500 border ${
+              themeDef.isDark
+                ? 'bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-500'
+                : 'bg-slate-50 border-slate-300 text-slate-800 placeholder:text-slate-400'
+            }`}
           />
         </div>
 
         {/* Diagram Category Dropdown */}
         <div>
-          <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">
+          <label className={`text-[10px] uppercase font-mono block mb-1 ${themeDef.textMutedClass}`}>
             Filter by Diagram Type
           </label>
           <select
             value={selectedCategory}
             onChange={e => onSelectCategory(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-blue-500 font-medium"
+            className={`w-full rounded-md px-2 py-1.5 text-xs focus:outline-none focus:border-blue-500 font-medium border ${
+              themeDef.isDark
+                ? 'bg-slate-950 border-slate-800 text-slate-100'
+                : 'bg-slate-50 border-slate-300 text-slate-800'
+            }`}
           >
             {categories.map(cat => (
               <option key={cat.id} value={cat.id}>
@@ -217,21 +229,25 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
               onClick={() => {
                 if (!isReadOnly) onSelectTemplate(template.id);
               }}
-              className={`group flex items-start gap-2.5 p-2 rounded-lg border border-slate-800 bg-slate-950/60 hover:bg-slate-800/60 hover:border-slate-700 transition-all cursor-grab active:cursor-grabbing ${
-                isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+              className={`group flex items-start gap-2.5 p-2 rounded-lg border transition-all cursor-grab active:cursor-grabbing ${
+                isReadOnly
+                  ? 'opacity-50 cursor-not-allowed'
+                  : themeDef.isDark
+                  ? 'border-slate-800 bg-slate-950/60 hover:bg-slate-800/60 hover:border-slate-700'
+                  : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
               }`}
             >
-              <div className="p-2 rounded bg-slate-900 border border-slate-800 group-hover:border-slate-700 shrink-0">
+              <div className={`p-2 rounded border shrink-0 ${themeDef.isDark ? 'bg-slate-900 border-slate-800 group-hover:border-slate-700' : 'bg-slate-100 border-slate-200'}`}>
                 {getTemplateIcon(template.iconName)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-slate-200 truncate group-hover:text-blue-300">
+                <div className={`text-xs font-semibold truncate group-hover:text-blue-400 ${themeDef.textPrimaryClass}`}>
                   {template.name}
                 </div>
-                <div className="text-[10px] text-slate-400 line-clamp-1">
+                <div className={`text-[10px] line-clamp-1 ${themeDef.textMutedClass}`}>
                   {template.description}
                 </div>
-                <div className="mt-1 flex items-center gap-1 text-[9px] font-mono text-slate-500 uppercase">
+                <div className="mt-1 flex items-center gap-1 text-[9px] font-mono opacity-60 uppercase">
                   <span>{template.category}</span>
                 </div>
               </div>
@@ -241,7 +257,7 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
       </div>
 
       {/* Bottom Sticky Note Quick Action */}
-      <div className="p-2.5 border-t border-slate-800 bg-slate-950/50">
+      <div className={`p-2.5 border-t ${themeDef.borderClass} ${themeDef.isDark ? 'bg-slate-950/50' : 'bg-slate-50'}`}>
         <button
           disabled={isReadOnly}
           onClick={() => onSelectTemplate('sticky-yellow')}
