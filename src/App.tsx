@@ -33,6 +33,7 @@ import { GitHubPublishModal } from './components/modals/GitHubPublishModal';
 import { WorkspaceModal } from './components/modals/WorkspaceModal';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { CreateChildDiagramModal } from './components/modals/CreateChildDiagramModal';
+import { SaveSuccessModal } from './components/modals/SaveSuccessModal';
 import { workspaceService } from './services/workspaceService';
 import { getExampleDiagramForType } from './data/diagramExamples';
 import { THEMES } from './utils/themeConfig';
@@ -71,6 +72,7 @@ export default function App() {
   const [isNewPageModalOpen, setIsNewPageModalOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isSaveSuccessModalOpen, setIsSaveSuccessModalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [activeWs, setActiveWs] = useState(() => workspaceService.getActiveWorkspace());
   const [childModalNode, setChildModalNode] = useState<DiagramNode | null>(null);
@@ -633,6 +635,7 @@ export default function App() {
       `Saved diagram to ${activeWs.name}/${activeWs.activeDiagramFilename}`
     );
     setSaveStatus('saved');
+    setIsSaveSuccessModalOpen(true);
     setTimeout(() => setSaveStatus('idle'), 2500);
   }, [document, persistDocument, activeWs]);
 
@@ -853,6 +856,17 @@ export default function App() {
         onClose={() => setChildModalNode(null)}
         onNavigateToChildDiagram={handleNavigateToChildDiagram}
         onLinkChildDiagram={handleLinkChildDiagram}
+      />
+
+      <SaveSuccessModal
+        isOpen={isSaveSuccessModalOpen}
+        onClose={() => setIsSaveSuccessModalOpen(false)}
+        fullPath={workspaceService.getFullPath()}
+        filename={activeWs.activeDiagramFilename || 'diagram1.json'}
+        diagramName={document.name || 'Diagram'}
+        workspaceName={activeWs.name}
+        theme={settings.theme}
+        onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
       />
 
       <WorkspaceModal
