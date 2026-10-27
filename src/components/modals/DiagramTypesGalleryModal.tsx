@@ -4,14 +4,14 @@
  */
 
 import React, { useState } from 'react';
-import { DIAGRAM_TYPES_CATALOG, DiagramTypeDefinition } from '../../data/diagramTypesCatalog';
-import { DiagramType } from '../../types/diagram';
+import { DIAGRAM_TYPES_CATALOG } from '../../data/diagramTypesCatalog';
+import { DiagramType, AppTheme } from '../../types/diagram';
+import { THEMES } from '../../utils/themeConfig';
 import {
   Layers,
   Search,
   Check,
   Plus,
-  ArrowRight,
   Filter,
   Sparkles,
   Table,
@@ -38,6 +38,7 @@ interface DiagramTypesGalleryModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentType: DiagramType;
+  theme?: AppTheme;
   onSelectDiagramType: (type: DiagramType) => void;
   onCreateNewPageOfType: (type: DiagramType, name: string) => void;
   onFilterToolbox: (type: DiagramType) => void;
@@ -47,12 +48,16 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
   isOpen,
   onClose,
   currentType,
+  theme = 'dark',
   onSelectDiagramType,
   onCreateNewPageOfType,
   onFilterToolbox,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
+  const themeDef = THEMES[theme] || THEMES.dark;
+  const isDark = themeDef.isDark;
 
   if (!isOpen) return null;
 
@@ -102,47 +107,84 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
-      <div className="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col h-[88vh] text-slate-200 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+      <div
+        className={`w-full max-w-5xl rounded-2xl shadow-2xl flex flex-col h-[88vh] overflow-hidden border transition-colors duration-200 ${
+          isDark
+            ? 'bg-slate-900 border-slate-700 text-slate-100'
+            : 'bg-white border-slate-300 text-slate-800 shadow-slate-300/60'
+        }`}
+      >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+        <div
+          className={`px-6 py-4 border-b flex items-center justify-between ${
+            isDark ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'
+          }`}
+        >
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl">
               <Layers className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-100 uppercase tracking-wide">
+                <h2
+                  className={`text-base font-bold uppercase tracking-wide ${
+                    isDark ? 'text-slate-100' : 'text-slate-900'
+                  }`}
+                >
                   Enterprise Diagram Types &amp; Standards
                 </h2>
-                <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-full text-[10px] font-mono font-bold">
+                <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-[10px] font-mono font-bold">
                   {DIAGRAM_TYPES_CATALOG.length} Standardized Models
                 </span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold ${
+                    isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  Theme: {themeDef.name}
+                </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 Select from any standard modeling notation: ERD, BPMN, UML, DFD, IDEF0, CEQA, SIPOC, PERT, Gantt, C4 &amp; more.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-100 rounded-lg hover:bg-slate-800 cursor-pointer"
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isDark
+                ? 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+            }`}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Filter & Search Bar */}
-        <div className="p-4 border-b border-slate-800 bg-slate-950/40 space-y-3">
+        <div
+          className={`p-4 border-b space-y-3 ${
+            isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-100/70'
+          }`}
+        >
           <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search
+                className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${
+                  isDark ? 'text-slate-400' : 'text-slate-500'
+                }`}
+              />
               <input
                 type="text"
-                placeholder="Search by diagram name, standard (e.g. BPMN, CEQA, IDEF0, UML), or elements..."
+                placeholder="Search by diagram name, standard (e.g. BPMN, ERD, CEQA, IDEF0, UML), or elements..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                className={`w-full rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-blue-500 border ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800 text-slate-100 placeholder:text-slate-500'
+                    : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-xs'
+                }`}
               />
             </div>
           </div>
@@ -156,7 +198,9 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap cursor-pointer transition-colors ${
                   selectedCategory === cat
                     ? 'bg-blue-600 text-white font-medium shadow-sm'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                    : isDark
+                    ? 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    : 'bg-slate-200/80 text-slate-600 hover:text-slate-900 hover:bg-slate-300/80'
                 }`}
               >
                 {cat}
@@ -166,7 +210,11 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
         </div>
 
         {/* Catalog Grid */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div
+          className={`flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ${
+            isDark ? 'bg-slate-900/50' : 'bg-slate-50/50'
+          }`}
+        >
           {filteredTypes.map(item => {
             const isCurrent = item.id === currentType;
             return (
@@ -174,38 +222,68 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
                 key={item.id}
                 className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
                   isCurrent
-                    ? 'bg-slate-950 border-blue-500/80 ring-2 ring-blue-500/30'
-                    : 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700 hover:bg-slate-900/60'
+                    ? isDark
+                      ? 'bg-slate-950 border-blue-500/80 ring-2 ring-blue-500/30'
+                      : 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/30 shadow-sm'
+                    : isDark
+                    ? 'bg-slate-950/60 border-slate-800/90 hover:border-slate-700 hover:bg-slate-900/60'
+                    : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow-md'
                 }`}
               >
                 <div>
                   {/* Card Header */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg shrink-0">
+                      <div
+                        className={`p-2 rounded-lg shrink-0 border ${
+                          isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+                        }`}
+                      >
                         {getCatalogIcon(item.iconName)}
                       </div>
                       <div>
-                        <h3 className="font-bold text-xs text-slate-100 leading-snug">{item.name}</h3>
-                        <span className="text-[10px] text-slate-400 font-mono">{item.standard}</span>
+                        <h3
+                          className={`font-bold text-xs leading-snug ${
+                            isDark ? 'text-slate-100' : 'text-slate-900'
+                          }`}
+                        >
+                          {item.name}
+                        </h3>
+                        <span
+                          className={`text-[10px] font-mono ${
+                            isDark ? 'text-slate-400' : 'text-slate-500'
+                          }`}
+                        >
+                          {item.standard}
+                        </span>
                       </div>
                     </div>
                     {isCurrent && (
-                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded text-[9px] font-bold font-mono shrink-0">
+                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded text-[9px] font-bold font-mono shrink-0">
                         ACTIVE
                       </span>
                     )}
                   </div>
 
                   {/* Summary */}
-                  <p className="text-xs text-slate-300 leading-relaxed my-2">{item.summary}</p>
+                  <p
+                    className={`text-xs leading-relaxed my-2 ${
+                      isDark ? 'text-slate-300' : 'text-slate-600'
+                    }`}
+                  >
+                    {item.summary}
+                  </p>
 
                   {/* Key Elements tags */}
                   <div className="flex flex-wrap gap-1 my-2.5">
                     {item.keyElements.map((el, i) => (
                       <span
                         key={i}
-                        className="px-1.5 py-0.5 bg-slate-900 rounded text-[10px] text-slate-400 font-mono border border-slate-800"
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
+                          isDark
+                            ? 'bg-slate-900 text-slate-400 border-slate-800'
+                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
                       >
                         {el}
                       </span>
@@ -214,16 +292,24 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
                 </div>
 
                 {/* Card Actions */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 mt-2">
+                <div
+                  className={`pt-3 border-t flex items-center justify-between gap-2 mt-2 ${
+                    isDark ? 'border-slate-800/80' : 'border-slate-200'
+                  }`}
+                >
                   <button
                     onClick={() => {
                       onFilterToolbox(item.id);
                       onClose();
                     }}
-                    className="flex-1 py-1.5 px-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1 cursor-pointer transition-colors border ${
+                      isDark
+                        ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                        : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                    }`}
                     title="Filter Toolbox to show this diagram's shapes"
                   >
-                    <Filter className="w-3 h-3 text-blue-400" />
+                    <Filter className="w-3 h-3 text-blue-500" />
                     <span>Filter Shapes</span>
                   </button>
 
@@ -245,13 +331,24 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between text-xs text-slate-400">
+        <div
+          className={`px-6 py-3 border-t flex items-center justify-between text-xs ${
+            isDark
+              ? 'border-slate-800 bg-slate-950/70 text-slate-400'
+              : 'border-slate-200 bg-slate-50 text-slate-600'
+          }`}
+        >
           <span>
-            Current Active Model: <strong className="text-blue-400 uppercase font-mono">{currentType}</strong>
+            Current Active Model:{' '}
+            <strong className="text-blue-500 uppercase font-mono">{currentType}</strong>
           </span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-medium cursor-pointer"
+            className={`px-4 py-1.5 rounded font-medium cursor-pointer transition-colors ${
+              isDark
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+            }`}
           >
             Close Gallery
           </button>

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { DiagramNode, DiagramPage, StickyNote, Comment, UserRole, AppTheme } from '../../types/diagram';
+import { DiagramNode, DiagramEdge, DiagramPage, StickyNote, Comment, UserRole, AppTheme } from '../../types/diagram';
 import {
   FileText,
   Sliders,
@@ -26,31 +26,48 @@ import {
   Cpu,
   FolderOpen,
   Palette,
+  CornerDownRight,
+  Spline,
+  Minus,
+  RotateCcw,
+  Link2,
+  Check,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
+import { getDefaultConnectorStyleForDiagram, CONNECTOR_STYLE_OPTIONS } from '../../utils/diagramConnectorConfig';
 
 interface NodeInspectorProps {
   selectedNode: DiagramNode | null;
+  selectedEdge?: DiagramEdge | null;
   currentPage: DiagramPage;
   allPages: DiagramPage[];
   userRole: UserRole;
   theme?: AppTheme;
   onUpdateNode: (updatedNode: DiagramNode) => void;
+  onUpdateEdge?: (updatedEdge: DiagramEdge) => void;
   onDeleteNode: (nodeId: string) => void;
+  onDeleteEdge?: (edgeId: string) => void;
   onClose: () => void;
   onDrillDown?: (pageId: string) => void;
+  onOpenChildDiagramModal?: (node: DiagramNode) => void;
+  onNavigateChildDiagram?: (filename: string) => void;
 }
 
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
   selectedNode,
+  selectedEdge,
   currentPage,
   allPages,
   userRole,
   theme = 'dark',
   onUpdateNode,
+  onUpdateEdge,
   onDeleteNode,
+  onDeleteEdge,
   onClose,
   onDrillDown,
+  onOpenChildDiagramModal,
+  onNavigateChildDiagram,
 }) => {
   const [activeTab, setActiveTab] = useState<'props' | 'docs' | 'comments' | 'group'>('props');
   const [newTagInput, setNewTagInput] = useState('');
@@ -59,6 +76,286 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const [stickyColor, setStickyColor] = useState<StickyNote['color']>('yellow');
 
   const themeDef = THEMES[theme] || THEMES.dark;
+
+  if (selectedEdge && !selectedNode) {
+    const sourceNode = currentPage.nodes.find(n => n.id === selectedEdge.sourceNodeId);
+    const targetNode = currentPage.nodes.find(n => n.id === selectedEdge.targetNodeId);
+    const defaultRouting = getDefaultConnectorStyleForDiagram(currentPage.diagramType);
+    const isReadOnly = userRole === 'viewer';
+
+    const edgeColors = [
+      { label: 'Slate', color: '#94a3b8' },
+      { label: 'Blue', color: '#38bdf8' },
+      { label: 'Emerald', color: '#34d399' },
+      { label: 'Amber', color: '#fbbf24' },
+      { label: 'Purple', color: '#c084fc' },
+      { label: 'Rose', color: '#fb7185' },
+    ];
+
+    return (
+      <div className={`w-80 h-full border-l flex flex-col select-none transition-colors duration-150 ${themeDef.sidebarClass}`}>
+        {/* Header */}
+        <div className={`p-3.5 border-b flex items-center justify-between ${themeDef.isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+          <div className="flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-sky-400" />
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${themeDef.isDark ? 'text-slate-100' : 'text-slate-900'}`}>
+              Connector Style
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className={`p-1 rounded cursor-pointer transition-colors ${
+              themeDef.isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 space-y-4 flex-1 overflow-y-auto text-xs">
+          {/* Connection Target Overview */}
+          <div className={`p-2.5 rounded-lg border flex items-center justify-between ${
+            themeDef.isDark ? 'bg-slate-950/70 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
+            <span className="font-semibold truncate max-w-[100px] text-sky-400">
+              {sourceNode?.label || 'Source'}
+            </span>
+            <span className="text-[10px] font-mono opacity-60">→</span>
+            <span className="font-semibold truncate max-w-[100px] text-emerald-400">
+              {targetNode?.label || 'Target'}
+            </span>
+          </div>
+
+          {/* Change 1: Routing Style Selection (Orthogonal corners vs Bezier curves vs Straight) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`text-[10px] uppercase font-mono font-bold ${themeDef.textMutedClass}`}>
+                Connection Routing Style
+              </label>
+              <span className="text-[9px] font-mono text-sky-400 capitalize">
+                {selectedEdge.type || 'orthogonal'}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              {/* Corners (Orthogonal) */}
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={() => onUpdateEdge?.({ ...selectedEdge, type: 'orthogonal' })}
+                className={`w-full p-2 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  (selectedEdge.type || 'orthogonal') === 'orthogonal'
+                    ? 'border-blue-500 bg-blue-600/15 text-blue-400 ring-1 ring-blue-500/50 font-semibold'
+                    : themeDef.isDark
+                    ? 'border-slate-800 bg-slate-950 hover:border-slate-700 text-slate-300'
+                    : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded bg-sky-500/10 text-sky-400">
+                    <CornerDownRight className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">Corners (Orthogonal)</div>
+                    <div className="text-[10px] opacity-70">90° corners • Standard for ERD & BPMN</div>
+                  </div>
+                </div>
+                {(selectedEdge.type || 'orthogonal') === 'orthogonal' && (
+                  <Check className="w-4 h-4 text-blue-400 shrink-0" />
+                )}
+              </button>
+
+              {/* Curves (Bezier) */}
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={() => onUpdateEdge?.({ ...selectedEdge, type: 'curved' })}
+                className={`w-full p-2 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  selectedEdge.type === 'curved'
+                    ? 'border-purple-500 bg-purple-600/15 text-purple-400 ring-1 ring-purple-500/50 font-semibold'
+                    : themeDef.isDark
+                    ? 'border-slate-800 bg-slate-950 hover:border-slate-700 text-slate-300'
+                    : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded bg-purple-500/10 text-purple-400">
+                    <Spline className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">Curved (Bezier)</div>
+                    <div className="text-[10px] opacity-70">Smooth curves • Standard for Mind Maps</div>
+                  </div>
+                </div>
+                {selectedEdge.type === 'curved' && (
+                  <Check className="w-4 h-4 text-purple-400 shrink-0" />
+                )}
+              </button>
+
+              {/* Straight */}
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={() => onUpdateEdge?.({ ...selectedEdge, type: 'straight' })}
+                className={`w-full p-2 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  selectedEdge.type === 'straight'
+                    ? 'border-emerald-500 bg-emerald-600/15 text-emerald-400 ring-1 ring-emerald-500/50 font-semibold'
+                    : themeDef.isDark
+                    ? 'border-slate-800 bg-slate-950 hover:border-slate-700 text-slate-300'
+                    : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded bg-emerald-500/10 text-emerald-400">
+                    <Minus className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">Straight</div>
+                    <div className="text-[10px] opacity-70">Direct line • Standard for PERT & Sequence</div>
+                  </div>
+                </div>
+                {selectedEdge.type === 'straight' && (
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                )}
+              </button>
+            </div>
+
+            {/* Diagram Default Reset pill */}
+            <div className={`mt-2 p-2 rounded-lg border flex items-center justify-between text-[11px] ${
+              themeDef.isDark ? 'bg-slate-950/50 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono text-slate-400">
+                  {currentPage.diagramType.toUpperCase()} Standard:
+                </span>
+                <span className="font-bold font-mono text-sky-400 capitalize">
+                  {defaultRouting}
+                </span>
+              </div>
+              {selectedEdge.type !== defaultRouting && !isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => onUpdateEdge?.({ ...selectedEdge, type: defaultRouting })}
+                  className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-mono flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Line Pattern (Solid, Dashed, Dotted) */}
+          <div>
+            <label className={`text-[10px] uppercase font-mono font-bold block mb-1.5 ${themeDef.textMutedClass}`}>
+              Line Pattern
+            </label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['solid', 'dashed', 'dotted'] as const).map(pattern => (
+                <button
+                  key={pattern}
+                  type="button"
+                  disabled={isReadOnly}
+                  onClick={() => onUpdateEdge?.({ ...selectedEdge, lineStyle: pattern })}
+                  className={`py-1.5 rounded-lg border text-xs font-mono uppercase transition-colors cursor-pointer ${
+                    (selectedEdge.lineStyle || 'solid') === pattern
+                      ? 'bg-blue-600 text-white font-bold border-blue-500'
+                      : themeDef.isDark
+                      ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  {pattern}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Marker End (Arrow, Crow's foot, Diamond, None) */}
+          <div>
+            <label className={`text-[10px] uppercase font-mono font-bold block mb-1.5 ${themeDef.textMutedClass}`}>
+              Line End Marker
+            </label>
+            <select
+              disabled={isReadOnly}
+              value={selectedEdge.markerEnd || 'arrow'}
+              onChange={e => onUpdateEdge?.({ ...selectedEdge, markerEnd: e.target.value as any })}
+              className={`w-full p-2 rounded-lg border text-xs focus:outline-none focus:border-blue-500 ${
+                themeDef.isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+              }`}
+            >
+              <option value="arrow">Arrow (Standard Flow)</option>
+              <option value="crow-foot-many">Crow's Foot Zero or Many (0..*)</option>
+              <option value="crow-foot-one">Crow's Foot Exactly One (1)</option>
+              <option value="diamond">Diamond (UML Composition)</option>
+              <option value="diamond-filled">Filled Diamond (UML Aggregation)</option>
+              <option value="circle">Circle Marker</option>
+              <option value="none">None (Clean Line - Mind Map)</option>
+            </select>
+          </div>
+
+          {/* Stroke Color */}
+          <div>
+            <label className={`text-[10px] uppercase font-mono font-bold block mb-1.5 ${themeDef.textMutedClass}`}>
+              Line Color
+            </label>
+            <div className="flex items-center gap-2">
+              {edgeColors.map(swatch => (
+                <button
+                  key={swatch.label}
+                  type="button"
+                  disabled={isReadOnly}
+                  onClick={() => onUpdateEdge?.({ ...selectedEdge, color: swatch.color })}
+                  className="w-6 h-6 rounded-full border border-slate-500/40 hover:scale-125 transition-transform cursor-pointer relative shadow-xs"
+                  style={{ backgroundColor: swatch.color }}
+                  title={swatch.label}
+                >
+                  {(selectedEdge.color || '#94a3b8') === swatch.color && (
+                    <Check className="w-3.5 h-3.5 text-black absolute inset-0 m-auto" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Label */}
+          <div>
+            <label className={`text-[10px] uppercase font-mono font-bold block mb-1.5 ${themeDef.textMutedClass}`}>
+              Connector Label (Cardinality / Action)
+            </label>
+            <input
+              type="text"
+              disabled={isReadOnly}
+              placeholder="e.g. 1..*, has_many, transitions to"
+              value={selectedEdge.label || ''}
+              onChange={e => onUpdateEdge?.({ ...selectedEdge, label: e.target.value })}
+              className={`w-full p-2 rounded-lg border text-xs font-mono focus:outline-none focus:border-blue-500 ${
+                themeDef.isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+              }`}
+            />
+          </div>
+
+          {/* Delete Button */}
+          {!isReadOnly && (
+            <div className={`pt-3 border-t ${themeDef.isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteEdge?.(selectedEdge.id);
+                  onClose();
+                }}
+                className="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Connector</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (!selectedNode) {
     // Show Page Overview Inspector
@@ -1392,13 +1689,95 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       {/* Tab 4: Hierarchy & Nested Grouping */}
       {activeTab === 'group' && (
         <div className="flex-1 overflow-y-auto p-3.5 space-y-4 text-xs">
-          {/* Sub-process Drill-down link */}
-          <div>
-            <label className="text-[10px] uppercase font-mono text-purple-400 font-bold block mb-1">
-              Sub-Process Navigation Link
+          {/* Change 4: Dedicated Child Diagram (Individual JSON file) */}
+          <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] uppercase font-mono text-purple-300 font-bold flex items-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5 text-purple-400" />
+                <span>Child Diagram (Individual JSON)</span>
+              </label>
+              {selectedNode.childDiagramFilename && (
+                <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[9px] font-mono">
+                  {(selectedNode.childDiagramType || 'diagram').toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-300 leading-relaxed">
+              Every node can navigate to a dedicated child diagram of any type with its own JSON file.
+            </p>
+
+            {selectedNode.childDiagramFilename ? (
+              <div className="space-y-2 pt-1">
+                <div className="p-2 bg-slate-950 rounded-lg border border-purple-500/30 flex items-center justify-between">
+                  <div className="truncate">
+                    <div className="font-bold text-xs text-purple-200 truncate">
+                      {selectedNode.childDiagramTitle || selectedNode.childDiagramFilename}
+                    </div>
+                    <div className="text-[10px] font-mono text-slate-400 truncate">
+                      File: {selectedNode.childDiagramFilename}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedNode.childDiagramFilename) {
+                        onNavigateChildDiagram?.(selectedNode.childDiagramFilename);
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1 shrink-0 shadow-md shadow-purple-600/30"
+                  >
+                    <span>Open</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={isReadOnly}
+                    onClick={() => onOpenChildDiagramModal?.(selectedNode)}
+                    className="flex-1 py-1 px-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 cursor-pointer text-center"
+                  >
+                    Change Child Diagram
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isReadOnly}
+                    onClick={() =>
+                      onUpdateNode({
+                        ...selectedNode,
+                        childDiagramFilename: undefined,
+                        childDiagramTitle: undefined,
+                        childDiagramType: undefined,
+                      })
+                    }
+                    className="py-1 px-2 rounded bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-[10px] text-rose-300 cursor-pointer text-center"
+                  >
+                    Unlink
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={() => onOpenChildDiagramModal?.(selectedNode)}
+                className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-purple-600/20"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create / Link Child Diagram</span>
+              </button>
+            )}
+          </div>
+
+          {/* Sub-process In-Document Page Drill-down link */}
+          <div className="pt-2 border-t border-slate-800">
+            <label className="text-[10px] uppercase font-mono text-slate-400 font-bold block mb-1">
+              Internal Page Drill-Down Link
             </label>
             <p className="text-[11px] text-slate-400 mb-2">
-              Link this node to another page or sub-process diagram for breadcrumb drill-down.
+              Link this node to another page inside this same document file.
             </p>
             <select
               disabled={isReadOnly}
@@ -1421,10 +1800,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 onClick={() => {
                   if (selectedNode.drilldownPageId) onDrillDown?.(selectedNode.drilldownPageId);
                 }}
-                className="mt-2 w-full py-1.5 px-3 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center gap-1.5 shadow"
+                className="mt-2 w-full py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center gap-1.5 shadow"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                <span>Drill-down into Linked Diagram</span>
+                <span>Drill-down into Linked Page</span>
               </button>
             )}
           </div>

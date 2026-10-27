@@ -80,6 +80,9 @@ export interface DiagramNode {
   isGroup?: boolean;
   collapsed?: boolean;
   drilldownPageId?: string; // Linked sub-process / page for drill-down navigation
+  childDiagramFilename?: string; // Linked child diagram JSON filename (Change 4)
+  childDiagramTitle?: string;
+  childDiagramType?: DiagramType;
   style: {
     fill?: string;
     stroke?: string;

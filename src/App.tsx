@@ -32,6 +32,7 @@ import { DiagramTypesGalleryModal } from './components/modals/DiagramTypesGaller
 import { GitHubPublishModal } from './components/modals/GitHubPublishModal';
 import { WorkspaceModal } from './components/modals/WorkspaceModal';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { CreateChildDiagramModal } from './components/modals/CreateChildDiagramModal';
 import { workspaceService } from './services/workspaceService';
 import { getExampleDiagramForType } from './data/diagramExamples';
 import { THEMES } from './utils/themeConfig';
@@ -72,6 +73,10 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [activeWs, setActiveWs] = useState(() => workspaceService.getActiveWorkspace());
+  const [childModalNode, setChildModalNode] = useState<DiagramNode | null>(null);
+  const [navigationHistory, setNavigationHistory] = useState<
+    Array<{ filename: string; diagramName: string; pageId?: string; nodeLabel?: string }>
+  >([]);
 
   // Real-time Collaboration & Network Status
   const [collaborators, setCollaborators] = useState<Collaborator[]>(() =>
@@ -272,6 +277,33 @@ export default function App() {
       persistDocument({ ...document, pages: updatedPages });
     },
     [document, currentPage, persistDocument]
+  );
+
+  // Update edge connector (Change 1: Flip connector style)
+  const handleUpdateEdge = useCallback(
+    (updatedEdge: DiagramEdge) => {
+      const updatedEdges = currentPage.edges.map(e =>
+        e.id === updatedEdge.id ? updatedEdge : e
+      );
+      const updatedPages = document.pages.map(page =>
+        page.id === currentPage.id ? { ...page, edges: updatedEdges } : page
+      );
+      persistDocument({ ...document, pages: updatedPages });
+    },
+    [document, currentPage, persistDocument]
+  );
+
+  // Delete single edge
+  const handleDeleteEdge = useCallback(
+    (edgeId: string) => {
+      const updatedEdges = currentPage.edges.filter(e => e.id !== edgeId);
+      const updatedPages = document.pages.map(page =>
+        page.id === currentPage.id ? { ...page, edges: updatedEdges } : page
+      );
+      persistDocument({ ...document, pages: updatedPages });
+      if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
+    },
+    [document, currentPage, selectedEdgeId, persistDocument]
   );
 
   // Delete selected element (node or edge)
@@ -480,20 +512,94 @@ export default function App() {
     [document, persistDocument]
   );
 
-  const handleDeleteEdge = useCallback(
-    (edgeId: string) => {
-      const updatedPages = document.pages.map(p => {
-        if (p.id !== currentPage.id) return p;
-        return {
-          ...p,
-          edges: p.edges.filter(e => e.id !== edgeId),
-        };
-      });
-      persistDocument({ ...document, pages: updatedPages });
-      if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
+  // Open Child Diagram creation/linking modal for a node (Change 4)
+  const handleOpenChildDiagramModal = useCallback((node: DiagramNode) => {
+    setChildModalNode(node);
+  }, []);
+
+  // Link child diagram info to a node
+  const handleLinkChildDiagram = useCallback(
+    (nodeId: string, filename: string, title: string, childType: DiagramType) => {
+      const updatedNodes = currentPage.nodes.map(n =>
+        n.id === nodeId
+          ? {
+              ...n,
+              childDiagramFilename: filename,
+              childDiagramTitle: title,
+              childDiagramType: childType,
+            }
+          : n
+      );
+      handleUpdateNodes(updatedNodes);
     },
-    [document, currentPage, persistDocument, selectedEdgeId]
+    [currentPage, handleUpdateNodes]
   );
+
+  // Navigate into a child diagram JSON file (pushing current parent to history stack)
+  const handleNavigateToChildDiagram = useCallback(
+    (filename: string, nodeLabel?: string) => {
+      const currentWs = workspaceService.getActiveWorkspace();
+      const currentFilename = currentWs.activeDiagramFilename || 'diagram1.json';
+
+      // Save current document before navigating
+      workspaceService.saveCurrentDiagram(document);
+
+      // Push to history
+      setNavigationHistory(prev => [
+        ...prev,
+        {
+          filename: currentFilename,
+          diagramName: document.name || currentFilename,
+          pageId: activePageId,
+          nodeLabel: nodeLabel || selectedNode?.label,
+        },
+      ]);
+
+      // Load child diagram from local workspace storage
+      const childDoc = workspaceService.setActiveDiagram(filename);
+      setDocument(childDoc);
+      offlineSyncService.cacheDocument(childDoc);
+      if (childDoc.pages && childDoc.pages.length > 0) {
+        setActivePageId(childDoc.activePageId || childDoc.pages[0].id);
+      }
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+      collaborationService.addActivity(
+        'You',
+        '#8b5cf6',
+        `Navigated into child diagram '${filename}'`
+      );
+    },
+    [document, activePageId, selectedNode]
+  );
+
+  // Return to the parent diagram in the breadcrumb history
+  const handleNavigateBackParent = useCallback(() => {
+    if (navigationHistory.length === 0) return;
+
+    // Save current child diagram
+    workspaceService.saveCurrentDiagram(document);
+
+    const prevHistory = [...navigationHistory];
+    const parentEntry = prevHistory.pop()!;
+    setNavigationHistory(prevHistory);
+
+    const parentDoc = workspaceService.setActiveDiagram(parentEntry.filename);
+    setDocument(parentDoc);
+    offlineSyncService.cacheDocument(parentDoc);
+    if (parentEntry.pageId && parentDoc.pages.some(p => p.id === parentEntry.pageId)) {
+      setActivePageId(parentEntry.pageId);
+    } else if (parentDoc.pages && parentDoc.pages.length > 0) {
+      setActivePageId(parentDoc.activePageId || parentDoc.pages[0].id);
+    }
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    collaborationService.addActivity(
+      'You',
+      '#3b82f6',
+      `Returned to parent diagram '${parentEntry.filename}'`
+    );
+  }, [document, navigationHistory]);
 
   const handleLoadWorkspaceDiagram = useCallback(
     (doc: DiagramDocument) => {
@@ -567,6 +673,8 @@ export default function App() {
         saveStatus={saveStatus}
         activeWorkspaceName={activeWs.name}
         activeDiagramFilename={activeWs.activeDiagramFilename}
+        navigationHistory={navigationHistory}
+        onNavigateBack={handleNavigateBackParent}
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onManualSave={handleManualSave}
@@ -615,17 +723,25 @@ export default function App() {
           selectedEdgeId={selectedEdgeId}
           userRole={userRole}
           theme={settings.theme}
+          diagramType={currentPage.diagramType}
           settings={settings}
           onSelectNode={nodeId => {
             setSelectedNodeId(nodeId);
-            if (nodeId) setIsInspectorOpen(true);
+            if (nodeId) {
+              setSelectedEdgeId(null);
+              setIsInspectorOpen(true);
+            }
           }}
           onSelectEdge={edgeId => {
             setSelectedEdgeId(edgeId);
-            setSelectedNodeId(null);
+            if (edgeId) {
+              setSelectedNodeId(null);
+              setIsInspectorOpen(true);
+            }
           }}
           onUpdateNodes={handleUpdateNodes}
           onAddEdge={handleAddEdge}
+          onUpdateEdge={handleUpdateEdge}
           onDeleteSelected={handleDeleteSelected}
           onDrillDown={handleDrillDown}
           onOpenDoc={node => {
@@ -636,6 +752,8 @@ export default function App() {
           onOpenNewPageModal={() => setIsNewPageModalOpen(true)}
           onDeleteEdge={handleDeleteEdge}
           onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+          onOpenChildDiagramModal={handleOpenChildDiagramModal}
+          onNavigateChildDiagram={handleNavigateToChildDiagram}
           onUpdateNodeLabel={(nodeId, label) => {
             const targetNode = currentPage.nodes.find(n => n.id === nodeId);
             if (targetNode) {
@@ -648,14 +766,19 @@ export default function App() {
         {isInspectorOpen && (
           <NodeInspector
             selectedNode={selectedNode}
+            selectedEdge={currentPage.edges.find(e => e.id === selectedEdgeId) || null}
             currentPage={currentPage}
             allPages={document.pages}
             userRole={userRole}
             theme={settings.theme}
             onUpdateNode={handleUpdateSingleNode}
+            onUpdateEdge={handleUpdateEdge}
             onDeleteNode={handleDeleteNode}
+            onDeleteEdge={handleDeleteEdge}
             onClose={() => setIsInspectorOpen(false)}
             onDrillDown={handleDrillDown}
+            onOpenChildDiagramModal={handleOpenChildDiagramModal}
+            onNavigateChildDiagram={handleNavigateToChildDiagram}
           />
         )}
       </div>
@@ -665,6 +788,7 @@ export default function App() {
         isOpen={isGalleryOpen}
         onClose={() => setIsGalleryOpen(false)}
         currentType={currentPage.diagramType}
+        theme={settings.theme}
         onSelectDiagramType={handleFlipDiagramType}
         onCreateNewPageOfType={(type, name) => {
           handleCreatePage(name, type);
@@ -717,7 +841,18 @@ export default function App() {
         isOpen={isNewPageModalOpen}
         onClose={() => setIsNewPageModalOpen(false)}
         pages={document.pages}
+        theme={settings.theme}
         onCreatePage={handleCreatePage}
+      />
+
+      <CreateChildDiagramModal
+        isOpen={!!childModalNode}
+        parentNode={childModalNode}
+        parentDiagramType={currentPage.diagramType}
+        theme={settings.theme}
+        onClose={() => setChildModalNode(null)}
+        onNavigateToChildDiagram={handleNavigateToChildDiagram}
+        onLinkChildDiagram={handleLinkChildDiagram}
       />
 
       <WorkspaceModal

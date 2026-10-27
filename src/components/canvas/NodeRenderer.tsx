@@ -21,6 +21,8 @@ import {
   Calendar,
   AlertTriangle,
   FolderOpen,
+  Plus,
+  ExternalLink,
 } from 'lucide-react';
 
 interface NodeRendererProps {
@@ -39,6 +41,8 @@ interface NodeRendererProps {
   onOpenDoc?: (node: DiagramNode) => void;
   onUpdateLabel?: (nodeId: string, newLabel: string) => void;
   onNodeContextMenu?: (nodeId: string, e: React.MouseEvent) => void;
+  onOpenChildDiagramModal?: (node: DiagramNode) => void;
+  onNavigateChildDiagram?: (filename: string) => void;
   isReadOnly?: boolean;
 }
 
@@ -54,6 +58,8 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
   onOpenDoc,
   onUpdateLabel,
   onNodeContextMenu,
+  onOpenChildDiagramModal,
+  onNavigateChildDiagram,
   isReadOnly,
 }) => {
   const [isEditingLabel, setIsEditingLabel] = React.useState(false);
@@ -867,6 +873,39 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 
       {/* Render Node Body */}
       {renderNodeBody()}
+
+      {/* Child Diagram / Sub-Diagram Navigation Badge (Change 4: Available on EVERY node) */}
+      {node.childDiagramFilename ? (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            if (node.childDiagramFilename) {
+              onNavigateChildDiagram?.(node.childDiagramFilename);
+            }
+          }}
+          className="absolute -top-3 right-2 z-30 flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-600 hover:bg-purple-500 text-white text-[9px] font-bold shadow-lg shadow-purple-900/50 border border-purple-300/40 cursor-pointer transition-all hover:scale-105 pointer-events-auto"
+          title={`Click to navigate to child diagram: ${node.childDiagramTitle || node.childDiagramFilename} (${(node.childDiagramType || 'diagram').toUpperCase()})`}
+        >
+          <ExternalLink className="w-2.5 h-2.5" />
+          <span className="truncate max-w-[120px]">
+            {node.childDiagramTitle || node.childDiagramFilename.replace('.json', '')}
+          </span>
+        </button>
+      ) : isSelected && !isReadOnly ? (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onOpenChildDiagramModal?.(node);
+          }}
+          className="absolute -top-3 right-2 z-30 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900/90 hover:bg-purple-600 text-purple-300 hover:text-white text-[9px] font-semibold shadow-md border border-purple-500/40 cursor-pointer transition-all hover:scale-105 pointer-events-auto"
+          title="Create or link a dedicated child diagram JSON for this node"
+        >
+          <Plus className="w-2.5 h-2.5" />
+          <span>+ Child Diagram</span>
+        </button>
+      ) : null}
 
       {/* Hover Description Tooltip */}
       {(node.documentation?.description || (node.stickyNotes && node.stickyNotes.length > 0)) && (

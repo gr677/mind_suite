@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DiagramDocument } from '../types/diagram';
+import { DiagramDocument, DiagramType } from '../types/diagram';
 import { initialDiagramDocument } from '../data/seedDiagrams';
+import { getExampleDiagramForType } from '../data/diagramExamples';
 
 export interface WorkspaceDiagram {
   filename: string; // e.g. "diagram1.json"
@@ -221,17 +222,18 @@ class WorkspaceService {
     }
   }
 
-  public deleteWorkspace(id: string): void {
+  public deleteWorkspace(id: string): boolean {
     const keys = Object.keys(this.store.workspaces);
     if (keys.length <= 1) {
-      alert('Cannot delete the only remaining workspace.');
-      return;
+      console.warn('Cannot delete the only remaining workspace.');
+      return false;
     }
     delete this.store.workspaces[id];
     if (this.store.activeWorkspaceId === id) {
       this.store.activeWorkspaceId = Object.keys(this.store.workspaces)[0];
     }
     this.saveStore();
+    return true;
   }
 
   public setActiveDiagram(filename: string): DiagramDocument {
@@ -256,17 +258,44 @@ class WorkspaceService {
     this.saveStore();
   }
 
-  public createDiagram(filename: string, name: string, doc?: DiagramDocument): void {
+  public createDiagram(
+    filename: string,
+    name: string,
+    doc?: DiagramDocument,
+    initialType?: DiagramType
+  ): DiagramDocument {
     const ws = this.getActiveWorkspace();
     let safeFilename = filename.trim().toLowerCase();
     if (!safeFilename.endsWith('.json')) safeFilename += '.json';
     safeFilename = safeFilename.replace(/[^a-z0-9._-]/g, '_');
 
-    const newDoc: DiagramDocument = doc || {
-      ...initialDiagramDocument,
-      id: `doc-${ws.id}-${Date.now()}`,
-      name: name || safeFilename.replace('.json', ''),
-    };
+    let newDoc: DiagramDocument;
+    if (doc) {
+      newDoc = doc;
+    } else if (initialType) {
+      const starterPage = getExampleDiagramForType(initialType);
+      newDoc = {
+        id: `doc-${ws.id}-${Date.now()}`,
+        name: name || safeFilename.replace('.json', ''),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        activePageId: starterPage.id,
+        settings: {
+          gridSnap: true,
+          showGrid: true,
+          theme: 'dark',
+          showMinimap: true,
+        },
+        versions: [],
+        pages: [starterPage],
+      };
+    } else {
+      newDoc = {
+        ...initialDiagramDocument,
+        id: `doc-${ws.id}-${Date.now()}`,
+        name: name || safeFilename.replace('.json', ''),
+      };
+    }
 
     ws.diagrams[safeFilename] = {
       filename: safeFilename,
@@ -276,6 +305,7 @@ class WorkspaceService {
     };
     ws.activeDiagramFilename = safeFilename;
     this.saveStore();
+    return newDoc;
   }
 
   public renameDiagram(oldFilename: string, newFilename: string, newName?: string): void {
@@ -299,18 +329,19 @@ class WorkspaceService {
     this.saveStore();
   }
 
-  public deleteDiagram(filename: string): void {
+  public deleteDiagram(filename: string): boolean {
     const ws = this.getActiveWorkspace();
     const keys = Object.keys(ws.diagrams);
     if (keys.length <= 1) {
-      alert('Cannot delete the last diagram in this workspace. Create another diagram first.');
-      return;
+      console.warn('Cannot delete the last diagram in this workspace. Create another diagram first.');
+      return false;
     }
     delete ws.diagrams[filename];
     if (ws.activeDiagramFilename === filename) {
       ws.activeDiagramFilename = Object.keys(ws.diagrams)[0];
     }
     this.saveStore();
+    return true;
   }
 
   public downloadDiagramJson(filename?: string): void {

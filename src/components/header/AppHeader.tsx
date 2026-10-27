@@ -28,6 +28,7 @@ import {
   Check,
   Settings,
   Palette,
+  ArrowLeft,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
 
@@ -42,6 +43,8 @@ interface AppHeaderProps {
   saveStatus?: 'idle' | 'saving' | 'saved';
   activeWorkspaceName?: string;
   activeDiagramFilename?: string;
+  navigationHistory?: Array<{ filename: string; diagramName: string; pageId?: string; nodeLabel?: string }>;
+  onNavigateBack?: () => void;
   onOpenWorkspaceModal: () => void;
   onOpenSettingsModal: () => void;
   onManualSave: () => void;
@@ -67,6 +70,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   saveStatus = 'idle',
   activeWorkspaceName,
   activeDiagramFilename,
+  navigationHistory = [],
+  onNavigateBack,
   onOpenWorkspaceModal,
   onOpenSettingsModal,
   onManualSave,
@@ -125,6 +130,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           <Layers className="w-3.5 h-3.5" />
           <span>Diagram Types (19)</span>
         </button>
+
+        {/* Back to Parent Diagram Button (Change 4) */}
+        {navigationHistory.length > 0 && (
+          <button
+            onClick={onNavigateBack}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md shadow-purple-600/30 cursor-pointer transition-all shrink-0 animate-in fade-in"
+            title={`Return to parent diagram: ${navigationHistory[navigationHistory.length - 1].diagramName || navigationHistory[navigationHistory.length - 1].filename}`}
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to {navigationHistory[navigationHistory.length - 1].nodeLabel ? `Node "${navigationHistory[navigationHistory.length - 1].nodeLabel}"` : 'Parent Diagram'}</span>
+          </button>
+        )}
 
         {/* Workspace Storage Path Pill (Change 4: c:/omnimind/data/workspace1/diagram1.json) */}
         <button

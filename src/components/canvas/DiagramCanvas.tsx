@@ -4,7 +4,15 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { DiagramNode, DiagramEdge, Collaborator, UserRole, AppTheme, StudioSettings } from '../../types/diagram';
+import {
+  DiagramNode,
+  DiagramEdge,
+  Collaborator,
+  UserRole,
+  AppTheme,
+  StudioSettings,
+  DiagramType,
+} from '../../types/diagram';
 import { NodeRenderer } from './NodeRenderer';
 import { EdgeRenderer } from './EdgeRenderer';
 import {
@@ -18,11 +26,16 @@ import {
   Compass,
   Settings,
   Link2,
+  CornerDownRight,
+  Spline,
+  Minus,
+  RotateCcw,
 } from 'lucide-react';
 
 import { ContextMenu, ContextMenuPosition } from './ContextMenu';
 import { NodeContentEditModal } from '../modals/NodeContentEditModal';
 import { THEMES } from '../../utils/themeConfig';
+import { getDefaultConnectorStyleForDiagram } from '../../utils/diagramConnectorConfig';
 
 interface DiagramCanvasProps {
   nodes: DiagramNode[];
@@ -32,11 +45,13 @@ interface DiagramCanvasProps {
   selectedEdgeId: string | null;
   userRole: UserRole;
   theme: AppTheme;
+  diagramType?: DiagramType;
   settings?: StudioSettings;
   onSelectNode: (nodeId: string | null) => void;
   onSelectEdge: (edgeId: string | null) => void;
   onUpdateNodes: (nodes: DiagramNode[]) => void;
   onAddEdge: (edge: DiagramEdge) => void;
+  onUpdateEdge?: (edge: DiagramEdge) => void;
   onDeleteSelected: () => void;
   onDrillDown: (pageId: string) => void;
   onOpenDoc: (node: DiagramNode) => void;
@@ -45,6 +60,8 @@ interface DiagramCanvasProps {
   onOpenNewPageModal?: () => void;
   onDeleteEdge?: (edgeId: string) => void;
   onOpenSettingsModal?: () => void;
+  onOpenChildDiagramModal?: (node: DiagramNode) => void;
+  onNavigateChildDiagram?: (filename: string) => void;
 }
 
 export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
@@ -55,11 +72,13 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   selectedEdgeId,
   userRole,
   theme,
+  diagramType = 'generic',
   settings,
   onSelectNode,
   onSelectEdge,
   onUpdateNodes,
   onAddEdge,
+  onUpdateEdge,
   onDeleteSelected,
   onDrillDown,
   onOpenDoc,
@@ -68,9 +87,13 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   onOpenNewPageModal,
   onDeleteEdge,
   onOpenSettingsModal,
+  onOpenChildDiagramModal,
+  onNavigateChildDiagram,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const themeDef = THEMES[theme] || THEMES.dark;
+  const selectedEdge = edges.find(e => e.id === selectedEdgeId);
+  const defaultConnectorStyle = getDefaultConnectorStyleForDiagram(diagramType);
 
   // Viewport transformation
   const [zoom, setZoom] = useState(1);
@@ -220,18 +243,27 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   // Direct edge connection helper for context menu & toolbar
   const handleConnectDirect = (sourceNodeId: string, targetNodeId: string) => {
     if (sourceNodeId === targetNodeId) return;
+    const defaultRouting = getDefaultConnectorStyleForDiagram(diagramType);
     const newEdge: DiagramEdge = {
       id: `edge-${Date.now()}`,
       sourceNodeId,
       targetNodeId,
       sourceAnchor: 'right',
       targetAnchor: 'left',
-      type: 'orthogonal',
+      type: defaultRouting,
       lineStyle: 'solid',
       markerStart: 'none',
-      markerEnd: 'arrow',
+      markerEnd: diagramType === 'mindmap' ? 'none' : 'arrow',
     };
     onAddEdge(newEdge);
+  };
+
+  const handleEdgeContextMenu = (edgeId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectEdge(edgeId);
+    onSelectNode(null);
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId: null, edgeId });
   };
 
   // Start Resizing a node from handles
@@ -550,16 +582,17 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
       if (targetElement) {
         const targetNodeId = targetElement.id.replace('node-', '');
         if (targetNodeId !== connectingFrom.nodeId) {
+          const defaultRouting = getDefaultConnectorStyleForDiagram(diagramType);
           const newEdge: DiagramEdge = {
             id: `edge-${Date.now()}`,
             sourceNodeId: connectingFrom.nodeId,
             targetNodeId,
             sourceAnchor: connectingFrom.anchor,
             targetAnchor: 'left',
-            type: 'orthogonal',
+            type: defaultRouting,
             lineStyle: 'solid',
             markerStart: 'none',
-            markerEnd: 'arrow',
+            markerEnd: diagramType === 'mindmap' ? 'none' : 'arrow',
           };
           onAddEdge(newEdge);
         }
@@ -733,6 +766,95 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         </div>
       )}
 
+      {/* Floating Connector Style Switcher Quick Toolbar (Change 1) */}
+      {selectedEdge && !isReadOnly && (
+        <div className={`absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-xl shadow-2xl backdrop-blur-md border animate-in fade-in slide-in-from-top-2 ${themeDef.panelClass}`}>
+          <div className="flex items-center gap-1.5 pr-2 border-r border-slate-700/50">
+            <span className={`text-[10px] font-mono font-semibold uppercase ${themeDef.textMutedClass}`}>
+              Style:
+            </span>
+            <span className="text-xs font-bold text-sky-400 capitalize">
+              {selectedEdge.type || 'orthogonal'}
+            </span>
+          </div>
+
+          {/* Quick Style Toggles: Corners, Curves, Straight */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onUpdateEdge?.({ ...selectedEdge, type: 'orthogonal' })}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                (selectedEdge.type || 'orthogonal') === 'orthogonal'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : themeDef.isDark
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Corners (Orthogonal 90° step) - Default for ERD & BPMN"
+            >
+              <CornerDownRight className="w-3.5 h-3.5" />
+              <span>Corners</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onUpdateEdge?.({ ...selectedEdge, type: 'curved' })}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                selectedEdge.type === 'curved'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : themeDef.isDark
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Curved (Bezier smooth curve) - Default for Mind Maps & Fishbone"
+            >
+              <Spline className="w-3.5 h-3.5" />
+              <span>Curves</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onUpdateEdge?.({ ...selectedEdge, type: 'straight' })}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
+                selectedEdge.type === 'straight'
+                  ? 'bg-blue-600 text-white shadow-xs font-bold'
+                  : themeDef.isDark
+                  ? 'hover:bg-slate-800 text-slate-300'
+                  : 'hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Straight (Direct line) - Default for PERT & UML Sequence"
+            >
+              <Minus className="w-3.5 h-3.5" />
+              <span>Straight</span>
+            </button>
+          </div>
+
+          {/* Reset to Diagram Default if modified */}
+          {selectedEdge.type !== defaultConnectorStyle && (
+            <button
+              type="button"
+              onClick={() => onUpdateEdge?.({ ...selectedEdge, type: defaultConnectorStyle })}
+              className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-mono flex items-center gap-1 cursor-pointer transition-colors"
+              title={`Reset to standard default for ${diagramType.toUpperCase()} (${defaultConnectorStyle})`}
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Default ({defaultConnectorStyle})</span>
+            </button>
+          )}
+
+          <div className={`w-[1px] h-4 mx-0.5 ${themeDef.isDark ? 'bg-slate-700' : 'bg-slate-300'}`} />
+
+          {/* Delete connector */}
+          <button
+            type="button"
+            onClick={() => onDeleteEdge?.(selectedEdge.id)}
+            className="p-1.5 hover:bg-rose-500/20 text-rose-400 rounded cursor-pointer transition-colors"
+            title="Delete Connector (Del)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* SVG Canvas Root for Lines, Connectors & Grid */}
       <svg
@@ -823,6 +945,32 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           >
             <polygon points="1,8 8,2 15,8 8,14" fill="#0f172a" stroke="#06b6d4" strokeWidth="2" />
           </marker>
+
+          {/* Diamond Filled Marker */}
+          <marker
+            id="marker-diamond-filled"
+            viewBox="0 0 16 16"
+            refX="14"
+            refY="8"
+            markerWidth="10"
+            markerHeight="10"
+            orient="auto"
+          >
+            <polygon points="1,8 8,2 15,8 8,14" fill="#06b6d4" stroke="#06b6d4" strokeWidth="1" />
+          </marker>
+
+          {/* Circle Marker */}
+          <marker
+            id="marker-circle"
+            viewBox="0 0 12 12"
+            refX="10"
+            refY="6"
+            markerWidth="8"
+            markerHeight="8"
+            orient="auto"
+          >
+            <circle cx="6" cy="6" r="4" fill="#38bdf8" stroke="#0f172a" strokeWidth="1" />
+          </marker>
         </defs>
 
         {/* Grid Background Rectangle */}
@@ -847,6 +995,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
               targetNode={target}
               isSelected={selectedEdgeId === edge.id}
               onSelect={onSelectEdge}
+              onContextMenu={handleEdgeContextMenu}
             />
           );
         })}
@@ -896,6 +1045,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
             onOpenDoc={onOpenDoc}
             onUpdateLabel={onUpdateNodeLabel}
             onNodeContextMenu={handleNodeContextMenu}
+            onOpenChildDiagramModal={onOpenChildDiagramModal}
+            onNavigateChildDiagram={onNavigateChildDiagram}
             isReadOnly={isReadOnly}
           />
         ))}
@@ -972,6 +1123,9 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
       <ContextMenu
         position={contextMenu}
         selectedNode={nodes.find(n => n.id === contextMenu?.nodeId) || null}
+        selectedEdge={edges.find(e => e.id === (contextMenu?.edgeId || selectedEdgeId)) || null}
+        diagramType={diagramType}
+        onUpdateEdge={onUpdateEdge}
         otherNodes={nodes.filter(n => n.id !== contextMenu?.nodeId)}
         theme={theme}
         onClose={() => setContextMenu(null)}

@@ -12,6 +12,7 @@ interface EdgeRendererProps {
   targetNode?: DiagramNode;
   isSelected?: boolean;
   onSelect?: (edgeId: string) => void;
+  onContextMenu?: (edgeId: string, e: React.MouseEvent) => void;
 }
 
 export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
@@ -20,6 +21,7 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
   targetNode,
   isSelected,
   onSelect,
+  onContextMenu,
 }) => {
   if (!sourceNode || !targetNode) return null;
 
@@ -47,18 +49,34 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
   let midX = (start.x + end.x) / 2;
   let midY = (start.y + end.y) / 2;
 
-  if (edge.type === 'straight') {
+  const edgeType = edge.type || 'orthogonal';
+
+  if (edgeType === 'straight') {
     pathD = `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
-  } else if (edge.type === 'curved') {
+  } else if (edgeType === 'curved') {
+    // Organic bezier curve (standard for Mind Map, Fishbone)
     const dx = end.x - start.x;
     const dy = end.y - start.y;
-    const cx1 = start.x + dx * 0.5;
-    const cy1 = start.y;
-    const cx2 = start.x + dx * 0.5;
-    const cy2 = end.y;
-    pathD = `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${end.x} ${end.y}`;
+    const isHorizontal =
+      edge.sourceAnchor === 'right' ||
+      edge.sourceAnchor === 'left' ||
+      Math.abs(dx) > Math.abs(dy);
+
+    if (isHorizontal) {
+      const cx1 = start.x + dx * 0.5;
+      const cy1 = start.y;
+      const cx2 = start.x + dx * 0.5;
+      const cy2 = end.y;
+      pathD = `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${end.x} ${end.y}`;
+    } else {
+      const cx1 = start.x;
+      const cy1 = start.y + dy * 0.5;
+      const cx2 = end.x;
+      const cy2 = start.y + dy * 0.5;
+      pathD = `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${end.x} ${end.y}`;
+    }
   } else {
-    // Orthogonal / Stepped path
+    // Orthogonal / Stepped path with 90° corners (standard for ERD, BPMN, Architecture)
     if (edge.sourceAnchor === 'right' || edge.sourceAnchor === 'left') {
       midX = start.x + (end.x - start.x) / 2;
       pathD = `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
@@ -77,20 +95,62 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
   else if (edge.markerEnd === 'diamond') markerEndId = 'marker-diamond';
   else if (edge.markerEnd === 'diamond-filled') markerEndId = 'marker-diamond-filled';
   else if (edge.markerEnd === 'circle') markerEndId = 'marker-circle';
+  else if (edge.markerEnd === 'none') markerEndId = '';
 
   const strokeColor = edge.color || (isSelected ? '#38bdf8' : '#94a3b8');
-  const strokeDash = edge.lineStyle === 'dashed' ? '6 4' : edge.lineStyle === 'dotted' ? '2 3' : undefined;
+  const strokeDash =
+    edge.lineStyle === 'dashed'
+      ? '6 4'
+      : edge.lineStyle === 'dotted'
+      ? '2 3'
+      : undefined;
+
+  const styleLabel =
+    edgeType === 'curved'
+      ? 'Curved (Bezier)'
+      : edgeType === 'straight'
+      ? 'Straight'
+      : 'Corners (Orthogonal)';
 
   return (
-    <g className="cursor-pointer group" onClick={() => onSelect?.(edge.id)}>
-      {/* Invisible thicker path for easier clicking/hover */}
+    <g
+      className="cursor-pointer group"
+      onClick={e => {
+        e.stopPropagation();
+        onSelect?.(edge.id);
+      }}
+      onContextMenu={e => {
+        if (onContextMenu) {
+          e.preventDefault();
+          e.stopPropagation();
+          onContextMenu(edge.id, e);
+        }
+      }}
+    >
+      <title>{`Connector: ${sourceNode.label} → ${targetNode.label} (${styleLabel}) - Click to configure or right-click to flip style`}</title>
+
+      {/* Invisible wider path for easier clicking/hover */}
       <path
         d={pathD}
         fill="none"
         stroke="transparent"
-        strokeWidth={16}
+        strokeWidth={20}
         className="pointer-events-auto"
       />
+
+      {/* Selection Glow Indicator */}
+      {isSelected && (
+        <path
+          d={pathD}
+          fill="none"
+          stroke="#38bdf8"
+          strokeWidth={(edge.strokeWidth || 2) + 6}
+          strokeOpacity={0.25}
+          strokeLinecap="round"
+          className="pointer-events-none animate-pulse"
+        />
+      )}
+
       {/* Visible Path */}
       <path
         d={pathD}
@@ -98,12 +158,13 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
         stroke={strokeColor}
         strokeWidth={edge.strokeWidth || (isSelected ? 2.5 : 1.75)}
         strokeDasharray={strokeDash}
-        markerEnd={edge.markerEnd !== 'none' ? `url(#${markerEndId})` : undefined}
-        className="transition-colors group-hover:stroke-blue-400"
+        markerEnd={markerEndId ? `url(#${markerEndId})` : undefined}
+        className="transition-colors group-hover:stroke-sky-400"
       />
-      {/* Edge Label */}
+
+      {/* Edge Label (e.g. 1..*, has_many, etc.) */}
       {edge.label && (
-        <g transform={`translate(${midX}, ${midY})`}>
+        <g transform={`translate(${midX}, ${midY})`} className="pointer-events-auto">
           <rect
             x={-edge.label.length * 3.5 - 6}
             y={-10}
@@ -111,14 +172,14 @@ export const EdgeRenderer: React.FC<EdgeRendererProps> = ({
             height={20}
             rx={4}
             fill="#0f172a"
-            stroke="#334155"
+            stroke={isSelected ? '#38bdf8' : '#334155'}
             strokeWidth={1}
             className="shadow-sm"
           />
           <text
             textAnchor="middle"
             dominantBaseline="central"
-            fill="#cbd5e1"
+            fill={isSelected ? '#38bdf8' : '#cbd5e1'}
             fontSize={11}
             fontWeight="500"
             fontFamily="monospace"
