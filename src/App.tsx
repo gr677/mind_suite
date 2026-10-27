@@ -862,10 +862,12 @@ export default function App() {
         isOpen={isSaveSuccessModalOpen}
         onClose={() => setIsSaveSuccessModalOpen(false)}
         fullPath={workspaceService.getFullPath()}
+        windowsPath={workspaceService.getWindowsFullPath()}
         filename={activeWs.activeDiagramFilename || 'diagram1.json'}
         diagramName={document.name || 'Diagram'}
         workspaceName={activeWs.name}
         theme={settings.theme}
+        document={document}
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
       />
 

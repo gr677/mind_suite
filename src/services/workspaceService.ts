@@ -33,6 +33,7 @@ const DEFAULT_BASE_PATH = 'c:/omnimind/data';
 class WorkspaceService {
   private store: WorkspaceStore;
   private listeners: Array<() => void> = [];
+  private lastSaveError: { message: string; timestamp: string; details?: string } | null = null;
 
   constructor() {
     this.store = this.loadStore();
@@ -78,10 +79,20 @@ class WorkspaceService {
   private saveStore(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.store));
-    } catch (e) {
+      this.lastSaveError = null;
+    } catch (e: any) {
       console.error('Failed to write workspaces to localStorage:', e);
+      this.lastSaveError = {
+        message: e?.message || 'QuotaExceededError: Local browser storage limit reached or access denied',
+        timestamp: new Date().toISOString(),
+        details: String(e?.stack || e),
+      };
     }
     this.notify();
+  }
+
+  public getLastSaveError(): { message: string; timestamp: string; details?: string } | null {
+    return this.lastSaveError;
   }
 
   public subscribe(listener: () => void): () => void {
@@ -165,6 +176,92 @@ class WorkspaceService {
     const fn = filename || ws.activeDiagramFilename || 'diagram1.json';
     const basePath = (ws.basePath || DEFAULT_BASE_PATH).replace(/\/$/, '');
     return `${basePath}/${ws.name}/${fn}`;
+  }
+
+  public getWindowsFullPath(workspaceId?: string, filename?: string): string {
+    const raw = this.getFullPath(workspaceId, filename);
+    let winPath = raw.replace(/\//g, '\\');
+    if (/^[a-z]:\\/i.test(winPath)) {
+      winPath = winPath.charAt(0).toUpperCase() + winPath.slice(1);
+    }
+    return winPath;
+  }
+
+  public async saveToPhysicalDisk(doc: DiagramDocument, defaultFilename?: string): Promise<{
+    success: boolean;
+    method: 'filePicker' | 'download';
+    savedPath?: string;
+    error?: string;
+    errorDetails?: string;
+  }> {
+    const filename = defaultFilename || this.getActiveWorkspace().activeDiagramFilename || 'diagram1.json';
+    const jsonStr = JSON.stringify(doc, null, 2);
+
+    // Try modern File System Access API (showSaveFilePicker)
+    if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+      try {
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: filename,
+          types: [
+            {
+              description: 'JSON Diagram File (*.json)',
+              accept: { 'application/json': ['.json'] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(jsonStr);
+        await writable.close();
+        return {
+          success: true,
+          method: 'filePicker',
+          savedPath: handle.name || filename,
+        };
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          return {
+            success: false,
+            method: 'filePicker',
+            error: 'Save file dialog was dismissed.',
+            errorDetails: 'The user cancelled the file picker without saving.',
+          };
+        }
+        console.warn('showSaveFilePicker unavailable or blocked in iframe, falling back to direct download:', err);
+        // Fall back to direct download
+        try {
+          this.downloadDiagramJson(filename);
+          return {
+            success: true,
+            method: 'download',
+            savedPath: filename,
+          };
+        } catch (downloadErr: any) {
+          return {
+            success: false,
+            method: 'download',
+            error: downloadErr?.message || 'Failed to download file to disk',
+            errorDetails: String(downloadErr?.stack || downloadErr),
+          };
+        }
+      }
+    }
+
+    // Direct download fallback
+    try {
+      this.downloadDiagramJson(filename);
+      return {
+        success: true,
+        method: 'download',
+        savedPath: filename,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        method: 'download',
+        error: err?.message || 'Failed to save file to local disk',
+        errorDetails: String(err?.stack || err),
+      };
+    }
   }
 
   public setActiveWorkspace(workspaceId: string): Workspace {
