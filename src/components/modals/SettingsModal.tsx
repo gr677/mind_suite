@@ -49,6 +49,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'themes' | 'saving' | 'canvas' | 'shortcuts'>('themes');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
+  const [rootDirInput, setRootDirInput] = useState(() => settings.rootDir || 'C:\\omnimind\\data');
+  const [rootDirSavedMsg, setRootDirSavedMsg] = useState(false);
 
   if (!isOpen) return null;
 
@@ -62,6 +64,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onManualSave();
     setSaveSuccessMsg(true);
     setTimeout(() => setSaveSuccessMsg(false), 2500);
+  };
+
+  const handleSaveRootDir = async () => {
+    const trimmed = (rootDirInput || 'C:\\omnimind\\data').trim();
+    onUpdateSettings({ ...settings, rootDir: trimmed });
+    await workspaceService.updateServerRootDir(trimmed);
+    setRootDirSavedMsg(true);
+    setTimeout(() => setRootDirSavedMsg(false), 2500);
   };
 
   const handleDownloadJson = () => {
@@ -287,10 +297,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs leading-relaxed">
                   <div className="p-3 rounded-lg bg-black/25 border border-emerald-500/20 space-y-1">
                     <span className="font-bold text-emerald-300 flex items-center gap-1">
-                      1. Automatic Local Save
+                      1. Automatic Server Disk Save
                     </span>
                     <p className="text-slate-300">
-                      Every shape addition, movement, column edit, or connection is automatically saved to browser IndexedDB and active workspace storage.
+                      Changes are sent directly to the server and written to real disk files (<code className="text-sky-300 font-mono text-[10px]">root.json</code> and child JSONs).
                     </p>
                   </div>
                   <div className="p-3 rounded-lg bg-black/25 border border-emerald-500/20 space-y-1">
@@ -312,6 +322,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Download the raw JSON file anytime to your computer or export standard SVG vector graphics for reports and presentations.
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {/* Root Directory Setting Card */}
+              <div
+                className={`p-4 rounded-xl border space-y-3 ${
+                  currentThemeDef.isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <HardDrive className="w-4 h-4 text-amber-400" />
+                    <span className="font-semibold text-sm">Root Directory Configuration</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Workspace Entrypoint: root.json
+                  </span>
+                </div>
+
+                <p className={`text-xs ${currentThemeDef.isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Configure the root filesystem path for all workspaces and diagrams. The browser sends and receives JSON diagrams directly to the server, and every workspace starts with a <strong className="text-sky-400 font-mono">root.json</strong> file as its designated starting point.
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={rootDirInput}
+                    onChange={e => setRootDirInput(e.target.value)}
+                    placeholder="e.g. C:\omnimind\data or c:/omnimind/data"
+                    className={`flex-1 px-3 py-2 rounded-xl text-xs font-mono border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+                      currentThemeDef.isDark
+                        ? 'bg-slate-900 border-slate-700 text-slate-100 placeholder-slate-500'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveRootDir}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                  >
+                    {rootDirSavedMsg ? '✓ Root Directory Saved' : 'Save Root Directory'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] font-mono pt-1 text-slate-400 border-t border-slate-800/40">
+                  <span>Workspace Starting Point Example:</span>
+                  <span className="text-sky-400 font-semibold truncate max-w-[65%]">
+                    {(rootDirInput || 'C:\\omnimind\\data').replace(/[\/\\]+$/, '')}\workspace1\root.json
+                  </span>
                 </div>
               </div>
 

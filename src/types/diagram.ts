@@ -174,6 +174,7 @@ export interface StudioSettings {
   showCollaborators: boolean;
   autoSaveInterval: 'instant' | '30s' | 'manual';
   defaultConnectorType: 'orthogonal' | 'curved' | 'straight';
+  rootDir?: string;
 }
 
 export interface DiagramDocument {

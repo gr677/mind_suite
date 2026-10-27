@@ -188,6 +188,18 @@ export default function App() {
     async function loadRemoteDoc() {
       if (offlineSyncService.isOnline()) {
         try {
+          const ws = workspaceService.getActiveWorkspace();
+          const targetFilename = ws.activeDiagramFilename || 'root.json';
+          // Try loading from workspace server disk first
+          const fileRes = await fetch(`/api/workspaces/${ws.id}/files/${targetFilename}`);
+          if (fileRes.ok) {
+            const data: DiagramDocument = await fileRes.json();
+            setDocument(data);
+            offlineSyncService.cacheDocument(data);
+            workspaceService.saveCurrentDiagram(data);
+            return;
+          }
+
           const res = await fetch(`/api/diagrams/${initialDiagramDocument.id}`);
           if (res.ok) {
             const data: DiagramDocument = await res.json();
@@ -541,7 +553,7 @@ export default function App() {
   const handleNavigateToChildDiagram = useCallback(
     (filename: string, nodeLabel?: string) => {
       const currentWs = workspaceService.getActiveWorkspace();
-      const currentFilename = currentWs.activeDiagramFilename || 'diagram1.json';
+      const currentFilename = currentWs.activeDiagramFilename || 'root.json';
 
       // Save current document before navigating
       workspaceService.saveCurrentDiagram(document);
@@ -625,10 +637,12 @@ export default function App() {
     }
   }, []);
 
-  const handleManualSave = useCallback(() => {
+  const handleManualSave = useCallback(async () => {
     setSaveStatus('saving');
     persistDocument(document);
     workspaceService.saveCurrentDiagram(document);
+    // Persist synchronously to server disk so save modal reflects latest disk write
+    await workspaceService.saveCurrentDiagramToServer(document);
     collaborationService.addActivity(
       'You',
       '#10b981',

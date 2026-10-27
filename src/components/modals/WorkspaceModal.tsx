@@ -564,6 +564,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
             <div className="flex-1 overflow-y-auto space-y-2 mt-3 pr-1">
               {Object.values(activeWs.diagrams).map(diag => {
                 const isCurrent = diag.filename === activeWs.activeDiagramFilename;
+                const isRoot = diag.filename === 'root.json';
                 const pageCount = diag.document?.pages?.length || 1;
                 const nodeCount =
                   diag.document?.pages?.reduce((acc, p) => acc + (p.nodes?.length || 0), 0) || 0;
@@ -585,7 +586,9 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                     <div className="flex items-center gap-3 min-w-0">
                       <div
                         className={`p-2 rounded-lg ${
-                          isCurrent
+                          isRoot
+                            ? 'bg-amber-600 text-white'
+                            : isCurrent
                             ? 'bg-blue-600 text-white'
                             : isDark
                             ? 'bg-slate-800 text-slate-400'
@@ -599,6 +602,11 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                           <span className="font-mono text-xs font-bold text-sky-500">
                             {diag.filename}
                           </span>
+                          {isRoot && (
+                            <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded text-[9px] font-mono font-bold">
+                              ROOT ENTRYPOINT
+                            </span>
+                          )}
                           {isCurrent && (
                             <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 rounded text-[9px] font-mono font-bold">
                               CURRENT
@@ -646,7 +654,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                       >
                         <Download className="w-4 h-4" />
                       </button>
-                      {Object.keys(activeWs.diagrams).length > 1 && (
+                      {!isRoot && Object.keys(activeWs.diagrams).length > 1 && (
                         <button
                           onClick={e => {
                             e.stopPropagation();

@@ -69,6 +69,7 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
 
   // Check if workspaceService recorded any storage error
   const lastStorageError = workspaceService.getLastSaveError();
+  const lastServerResult = workspaceService.getLastServerSaveResult();
 
   useEffect(() => {
     if (isOpen) {
@@ -147,8 +148,17 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
                   Diagram Save Status &amp; Path
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  {lastStorageError ? 'STORAGE WARNING' : 'SAVED'}
+                  {lastServerResult?.success
+                    ? 'SAVED TO SERVER DISK'
+                    : lastServerResult?.error
+                    ? 'SERVER ERROR'
+                    : 'SAVED'}
                 </span>
+                {filename === 'root.json' && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    ROOT ENTRYPOINT
+                  </span>
+                )}
               </div>
               <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 Workspace: <span className="font-semibold text-amber-400">{workspaceName}</span> • File: <span className="font-mono text-sky-400">{filename}</span>
@@ -169,7 +179,52 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 space-y-4 text-xs overflow-y-auto max-h-[75vh]">
-          {/* Storage Error Alert (if any error occurred) */}
+          {/* Server Save Confirmation Banner */}
+          {lastServerResult?.success && (
+            <div className="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/20 text-emerald-200 space-y-1.5 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-xs text-emerald-300">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Physical File Stored on Server Disk</span>
+                </div>
+                {lastServerResult.bytes && (
+                  <span className="font-mono text-[10px] text-emerald-400">
+                    {(lastServerResult.bytes / 1024).toFixed(1)} KB written
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1 font-mono text-[10px] text-slate-300 pt-1">
+                <div>
+                  <span className="text-slate-400">Server Path: </span>
+                  <span className="text-emerald-300 break-all">{lastServerResult.physicalPath}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Configured Root Path: </span>
+                  <span className="text-sky-300 break-all">{lastServerResult.configuredPath}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Server Save Error Alert (if server returned error) */}
+          {lastServerResult?.error && (
+            <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-200 space-y-1.5 animate-in fade-in">
+              <div className="flex items-center gap-2 font-bold text-xs text-rose-300">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>Error Saving to Server Disk</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-rose-200">
+                {lastServerResult.error}
+              </p>
+              {lastServerResult.details && (
+                <pre className="p-2 bg-black/40 rounded text-[10px] font-mono text-rose-300 overflow-x-auto whitespace-pre-wrap">
+                  {lastServerResult.details}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {/* Storage Error Alert (if any browser localStorage error occurred) */}
           {lastStorageError && (
             <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-200 space-y-1.5 animate-in fade-in">
               <div className="flex items-center gap-2 font-bold text-xs text-rose-300">
@@ -431,7 +486,13 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
                 <div>[Health] Windows Backslash Path: {resolvedWindowsPath}</div>
                 <div>[Health] Unix URI Path: {fullPath}</div>
                 <div>[Health] Physical File System Access API: {typeof window !== 'undefined' && 'showSaveFilePicker' in window ? 'Supported' : 'Fallback to Blob Download'}</div>
-                {lastStorageError ? (
+                <div>[Health] Server Disk Storage: {lastServerResult ? (lastServerResult.success ? `OK (${lastServerResult.bytes} bytes at ${lastServerResult.physicalPath})` : `FAILED (${lastServerResult.error})`) : 'Synchronized'}</div>
+                {lastServerResult?.error ? (
+                  <div className="text-rose-400 pt-1 border-t border-slate-800">
+                    [Server Disk Error] {lastServerResult.error}
+                    {lastServerResult.details && <div>{lastServerResult.details}</div>}
+                  </div>
+                ) : lastStorageError ? (
                   <div className="text-rose-400 pt-1 border-t border-slate-800">
                     [Error Timestamp] {lastStorageError.timestamp}
                     <br />
@@ -439,7 +500,7 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
                   </div>
                 ) : (
                   <div className="text-emerald-400 pt-1 border-t border-slate-800">
-                    [Status] Zero errors returned. Diagram state is safely persistent.
+                    [Status] Zero errors returned. Diagram state is safely stored on server disk.
                   </div>
                 )}
               </div>

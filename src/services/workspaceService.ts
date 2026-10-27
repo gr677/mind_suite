@@ -8,7 +8,7 @@ import { initialDiagramDocument } from '../data/seedDiagrams';
 import { getExampleDiagramForType } from '../data/diagramExamples';
 
 export interface WorkspaceDiagram {
-  filename: string; // e.g. "diagram1.json"
+  filename: string; // e.g. "root.json", "child_payment.json"
   name: string; // Display name
   lastModified: string;
   document: DiagramDocument;
@@ -17,14 +17,27 @@ export interface WorkspaceDiagram {
 export interface Workspace {
   id: string; // e.g. "workspace1"
   name: string; // e.g. "workspace1"
-  basePath: string; // e.g. "c:/omnimind/data"
+  basePath: string; // e.g. "c:/omnimind/data" or "C:\omnimind\data"
   diagrams: Record<string, WorkspaceDiagram>;
-  activeDiagramFilename: string; // e.g. "diagram1.json"
+  activeDiagramFilename: string; // Starting entrypoint is "root.json"
 }
 
 export interface WorkspaceStore {
   activeWorkspaceId: string;
   workspaces: Record<string, Workspace>;
+}
+
+export interface ServerSaveResult {
+  success: boolean;
+  workspaceId?: string;
+  filename?: string;
+  isRoot?: boolean;
+  bytes?: number;
+  physicalPath?: string;
+  configuredPath?: string;
+  timestamp?: string;
+  error?: string;
+  details?: string;
 }
 
 const STORAGE_KEY = 'omnimind_workspaces_v1';
@@ -34,9 +47,11 @@ class WorkspaceService {
   private store: WorkspaceStore;
   private listeners: Array<() => void> = [];
   private lastSaveError: { message: string; timestamp: string; details?: string } | null = null;
+  private lastServerSaveResult: ServerSaveResult | null = null;
 
   constructor() {
     this.store = this.loadStore();
+    this.initFromServer();
   }
 
   private loadStore(): WorkspaceStore {
@@ -45,6 +60,33 @@ class WorkspaceService {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed?.workspaces && parsed?.activeWorkspaceId) {
+          // Migration: Ensure root.json is the entrypoint for each workspace
+          Object.values(parsed.workspaces).forEach((ws: any) => {
+            if (ws.diagrams) {
+              if (ws.diagrams['diagram1.json'] && !ws.diagrams['root.json']) {
+                ws.diagrams['root.json'] = {
+                  ...ws.diagrams['diagram1.json'],
+                  filename: 'root.json',
+                  name: ws.diagrams['diagram1.json'].name || 'Root Architecture',
+                };
+                delete ws.diagrams['diagram1.json'];
+                if (ws.activeDiagramFilename === 'diagram1.json') {
+                  ws.activeDiagramFilename = 'root.json';
+                }
+              }
+              if (!ws.diagrams['root.json']) {
+                ws.diagrams['root.json'] = {
+                  filename: 'root.json',
+                  name: 'Root Architecture & Workflows',
+                  lastModified: new Date().toISOString(),
+                  document: initialDiagramDocument,
+                };
+              }
+              if (!ws.activeDiagramFilename || !ws.diagrams[ws.activeDiagramFilename]) {
+                ws.activeDiagramFilename = 'root.json';
+              }
+            }
+          });
           return parsed;
         }
       }
@@ -52,15 +94,15 @@ class WorkspaceService {
       console.warn('Failed to parse saved workspaces from localStorage:', e);
     }
 
-    // Default Seed Workspace
+    // Default Seed Workspace starting with root.json
     const defaultWorkspace: Workspace = {
       id: 'workspace1',
       name: 'workspace1',
       basePath: DEFAULT_BASE_PATH,
-      activeDiagramFilename: 'diagram1.json',
+      activeDiagramFilename: 'root.json',
       diagrams: {
-        'diagram1.json': {
-          filename: 'diagram1.json',
+        'root.json': {
+          filename: 'root.json',
           name: initialDiagramDocument.name || 'Enterprise Architecture & Workflows',
           lastModified: new Date().toISOString(),
           document: initialDiagramDocument,
@@ -74,6 +116,37 @@ class WorkspaceService {
         workspace1: defaultWorkspace,
       },
     };
+  }
+
+  private async initFromServer(): Promise<void> {
+    try {
+      // 1. Fetch configured root directory from server
+      const configResp = await fetch('/api/storage/config');
+      if (configResp.ok) {
+        const configData = await configResp.json();
+        if (configData.configuredRootDir) {
+          Object.values(this.store.workspaces).forEach(ws => {
+            if (!ws.basePath || ws.basePath === DEFAULT_BASE_PATH) {
+              ws.basePath = configData.configuredRootDir;
+            }
+          });
+          this.saveStore();
+        }
+      }
+
+      // 2. Fetch server workspaces
+      const wsResp = await fetch('/api/workspaces');
+      if (wsResp.ok) {
+        const serverWorkspaces: any[] = await wsResp.json();
+        for (const sw of serverWorkspaces) {
+          if (!this.store.workspaces[sw.id]) {
+            this.createWorkspace(sw.name || sw.id, sw.basePath);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[WorkspaceService] Note: Running without server sync or server not ready:', err);
+    }
   }
 
   private saveStore(): void {
@@ -93,6 +166,10 @@ class WorkspaceService {
 
   public getLastSaveError(): { message: string; timestamp: string; details?: string } | null {
     return this.lastSaveError;
+  }
+
+  public getLastServerSaveResult(): ServerSaveResult | null {
+    return this.lastServerSaveResult;
   }
 
   public subscribe(listener: () => void): () => void {
@@ -123,10 +200,10 @@ class WorkspaceService {
         id: 'workspace1',
         name: 'workspace1',
         basePath: DEFAULT_BASE_PATH,
-        activeDiagramFilename: 'diagram1.json',
+        activeDiagramFilename: 'root.json',
         diagrams: {
-          'diagram1.json': {
-            filename: 'diagram1.json',
+          'root.json': {
+            filename: 'root.json',
             name: 'Default Architecture',
             lastModified: new Date().toISOString(),
             document: initialDiagramDocument,
@@ -150,21 +227,26 @@ class WorkspaceService {
     const ws = this.getActiveWorkspace();
     let diag = ws.diagrams[ws.activeDiagramFilename];
     if (!diag) {
-      const firstKey = Object.keys(ws.diagrams)[0];
-      if (firstKey) {
-        ws.activeDiagramFilename = firstKey;
-        diag = ws.diagrams[firstKey];
+      if (ws.diagrams['root.json']) {
+        ws.activeDiagramFilename = 'root.json';
+        diag = ws.diagrams['root.json'];
       } else {
-        const newDiag: WorkspaceDiagram = {
-          filename: 'diagram1.json',
-          name: 'New Architecture Model',
-          lastModified: new Date().toISOString(),
-          document: initialDiagramDocument,
-        };
-        ws.diagrams['diagram1.json'] = newDiag;
-        ws.activeDiagramFilename = 'diagram1.json';
-        this.saveStore();
-        return newDiag;
+        const firstKey = Object.keys(ws.diagrams)[0];
+        if (firstKey) {
+          ws.activeDiagramFilename = firstKey;
+          diag = ws.diagrams[firstKey];
+        } else {
+          const newDiag: WorkspaceDiagram = {
+            filename: 'root.json',
+            name: 'Root Architecture Model',
+            lastModified: new Date().toISOString(),
+            document: initialDiagramDocument,
+          };
+          ws.diagrams['root.json'] = newDiag;
+          ws.activeDiagramFilename = 'root.json';
+          this.saveStore();
+          return newDiag;
+        }
       }
     }
     return diag;
@@ -172,8 +254,8 @@ class WorkspaceService {
 
   public getFullPath(workspaceId?: string, filename?: string): string {
     const ws = workspaceId ? this.store.workspaces[workspaceId] : this.getActiveWorkspace();
-    if (!ws) return `${DEFAULT_BASE_PATH}/workspace1/diagram1.json`;
-    const fn = filename || ws.activeDiagramFilename || 'diagram1.json';
+    if (!ws) return `${DEFAULT_BASE_PATH}/workspace1/root.json`;
+    const fn = filename || ws.activeDiagramFilename || 'root.json';
     const basePath = (ws.basePath || DEFAULT_BASE_PATH).replace(/\/$/, '');
     return `${basePath}/${ws.name}/${fn}`;
   }
@@ -194,7 +276,7 @@ class WorkspaceService {
     error?: string;
     errorDetails?: string;
   }> {
-    const filename = defaultFilename || this.getActiveWorkspace().activeDiagramFilename || 'diagram1.json';
+    const filename = defaultFilename || this.getActiveWorkspace().activeDiagramFilename || 'root.json';
     const jsonStr = JSON.stringify(doc, null, 2);
 
     // Try modern File System Access API (showSaveFilePicker)
@@ -276,22 +358,22 @@ class WorkspaceService {
   public createWorkspace(name: string, basePath?: string): Workspace {
     const safeId = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || `workspace_${Date.now()}`;
     const id = this.store.workspaces[safeId] ? `${safeId}_${Date.now().toString().slice(-4)}` : safeId;
-    const cleanBasePath = (basePath || DEFAULT_BASE_PATH).trim();
+    const cleanBasePath = (basePath || this.getActiveWorkspace()?.basePath || DEFAULT_BASE_PATH).trim();
 
     const newWorkspace: Workspace = {
       id,
       name: name.trim() || id,
       basePath: cleanBasePath,
-      activeDiagramFilename: 'diagram1.json',
+      activeDiagramFilename: 'root.json',
       diagrams: {
-        'diagram1.json': {
-          filename: 'diagram1.json',
-          name: `${name.trim()} Diagram 1`,
+        'root.json': {
+          filename: 'root.json',
+          name: `${name.trim()} Root Architecture`,
           lastModified: new Date().toISOString(),
           document: {
             ...initialDiagramDocument,
-            id: `doc-${id}-diagram1`,
-            name: `${name.trim()} Model`,
+            id: `doc-${id}-root`,
+            name: `${name.trim()} Architecture`,
           },
         },
       },
@@ -300,6 +382,16 @@ class WorkspaceService {
     this.store.workspaces[id] = newWorkspace;
     this.store.activeWorkspaceId = id;
     this.saveStore();
+
+    // Also register on server disk
+    fetch('/api/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), id }),
+    }).catch(err => {
+      console.warn('[WorkspaceService] Note: Failed to create workspace on server disk:', err);
+    });
+
     return newWorkspace;
   }
 
@@ -317,6 +409,34 @@ class WorkspaceService {
       ws.basePath = newBasePath.trim();
       this.saveStore();
     }
+    this.updateServerRootDir(newBasePath.trim()).catch(() => {});
+  }
+
+  public async updateServerRootDir(newRootDir: string): Promise<string> {
+    const trimmed = (newRootDir || DEFAULT_BASE_PATH).trim();
+    try {
+      const resp = await fetch('/api/storage/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rootDir: trimmed }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const updated = data.configuredRootDir || trimmed;
+        Object.values(this.store.workspaces).forEach(ws => {
+          ws.basePath = updated;
+        });
+        this.saveStore();
+        return updated;
+      }
+    } catch (e) {
+      console.warn('Failed to update server rootDir:', e);
+    }
+    Object.values(this.store.workspaces).forEach(ws => {
+      ws.basePath = trimmed;
+    });
+    this.saveStore();
+    return trimmed;
   }
 
   public deleteWorkspace(id: string): boolean {
@@ -343,9 +463,9 @@ class WorkspaceService {
     return this.getActiveDiagram().document;
   }
 
-  public saveCurrentDiagram(doc: DiagramDocument): void {
+  public saveCurrentDiagram(doc: DiagramDocument, customFilename?: string): void {
     const ws = this.getActiveWorkspace();
-    const filename = ws.activeDiagramFilename || 'diagram1.json';
+    const filename = customFilename || ws.activeDiagramFilename || 'root.json';
     ws.diagrams[filename] = {
       filename,
       name: doc.name || filename.replace('.json', ''),
@@ -353,6 +473,86 @@ class WorkspaceService {
       document: doc,
     };
     this.saveStore();
+
+    // Trigger server-side disk write
+    this.saveCurrentDiagramToServer(doc, filename).catch(err => {
+      console.warn('[WorkspaceService] Failed saving diagram to server:', err);
+    });
+  }
+
+  public async saveCurrentDiagramToServer(
+    doc: DiagramDocument,
+    customFilename?: string
+  ): Promise<ServerSaveResult> {
+    const ws = this.getActiveWorkspace();
+    const filename = customFilename || ws.activeDiagramFilename || 'root.json';
+
+    try {
+      const resp = await fetch(`/api/workspaces/${ws.id}/files/${filename}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(doc),
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const failure: ServerSaveResult = {
+          success: false,
+          workspaceId: ws.id,
+          filename,
+          error: errData.error || `Server HTTP ${resp.status}`,
+          details: errData.details,
+        };
+        this.lastServerSaveResult = failure;
+        this.notify();
+        return failure;
+      }
+
+      const data = await resp.json();
+      const successResult: ServerSaveResult = {
+        success: true,
+        workspaceId: data.workspaceId || ws.id,
+        filename: data.filename || filename,
+        isRoot: data.isRoot ?? (filename === 'root.json'),
+        bytes: data.bytes,
+        physicalPath: data.physicalPath,
+        configuredPath: data.configuredPath,
+        timestamp: data.timestamp || new Date().toISOString(),
+      };
+      this.lastServerSaveResult = successResult;
+      this.notify();
+      return successResult;
+    } catch (err: any) {
+      const failure: ServerSaveResult = {
+        success: false,
+        workspaceId: ws.id,
+        filename,
+        error: err?.message || 'Could not connect to server storage API',
+        details: String(err?.stack || err),
+      };
+      this.lastServerSaveResult = failure;
+      this.notify();
+      return failure;
+    }
+  }
+
+  public async fetchDiagramFromServer(workspaceId: string, filename: string): Promise<DiagramDocument> {
+    const resp = await fetch(`/api/workspaces/${workspaceId}/files/${filename}`);
+    if (!resp.ok) {
+      throw new Error(`Failed to load ${filename} from server (HTTP ${resp.status})`);
+    }
+    const data = await resp.json();
+    const ws = this.store.workspaces[workspaceId];
+    if (ws) {
+      ws.diagrams[filename] = {
+        filename,
+        name: data.name || filename.replace('.json', ''),
+        lastModified: new Date().toISOString(),
+        document: data,
+      };
+      this.saveStore();
+    }
+    return data;
   }
 
   public createDiagram(
@@ -402,12 +602,21 @@ class WorkspaceService {
     };
     ws.activeDiagramFilename = safeFilename;
     this.saveStore();
+
+    // Persist to server disk
+    this.saveCurrentDiagramToServer(newDoc, safeFilename).catch(() => {});
+
     return newDoc;
   }
 
   public renameDiagram(oldFilename: string, newFilename: string, newName?: string): void {
     const ws = this.getActiveWorkspace();
     if (!ws.diagrams[oldFilename]) return;
+
+    if (oldFilename === 'root.json') {
+      console.warn('Cannot rename root.json: it is the required starting entrypoint for this workspace.');
+      return;
+    }
 
     let safeNewFilename = newFilename.trim().toLowerCase();
     if (!safeNewFilename.endsWith('.json')) safeNewFilename += '.json';
@@ -424,10 +633,18 @@ class WorkspaceService {
       ws.activeDiagramFilename = safeNewFilename;
     }
     this.saveStore();
+
+    // Write to server disk
+    this.saveCurrentDiagramToServer(diag.document, safeNewFilename).catch(() => {});
   }
 
   public deleteDiagram(filename: string): boolean {
     const ws = this.getActiveWorkspace();
+    if (filename === 'root.json') {
+      console.warn('Cannot delete root.json: every workspace requires root.json as its starting entrypoint.');
+      return false;
+    }
+
     const keys = Object.keys(ws.diagrams);
     if (keys.length <= 1) {
       console.warn('Cannot delete the last diagram in this workspace. Create another diagram first.');
@@ -435,9 +652,17 @@ class WorkspaceService {
     }
     delete ws.diagrams[filename];
     if (ws.activeDiagramFilename === filename) {
-      ws.activeDiagramFilename = Object.keys(ws.diagrams)[0];
+      ws.activeDiagramFilename = ws.diagrams['root.json'] ? 'root.json' : Object.keys(ws.diagrams)[0];
     }
     this.saveStore();
+
+    // Delete on server disk
+    fetch(`/api/workspaces/${ws.id}/files/${filename}`, {
+      method: 'DELETE',
+    }).catch(err => {
+      console.warn('[WorkspaceService] Failed to delete file on server:', err);
+    });
+
     return true;
   }
 
