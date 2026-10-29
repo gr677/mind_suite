@@ -642,7 +642,13 @@ export default function App() {
     persistDocument(document);
     workspaceService.saveCurrentDiagram(document);
     // Persist synchronously to server disk so save modal reflects latest disk write
-    await workspaceService.saveCurrentDiagramToServer(document);
+    const result = await workspaceService.saveCurrentDiagramToServer(document);
+    if (!result.success) {
+      console.error('[OmniMind App] Save diagram failed:', result.error, result.details);
+      setSaveStatus('idle');
+      setIsSaveSuccessModalOpen(true);
+      return;
+    }
     collaborationService.addActivity(
       'You',
       '#10b981',

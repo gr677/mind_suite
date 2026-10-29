@@ -22,6 +22,8 @@ import {
   Info,
   ShieldCheck,
   Save,
+  Terminal,
+  RefreshCw,
 } from 'lucide-react';
 import { AppTheme, DiagramDocument } from '../../types/diagram';
 import { THEMES } from '../../utils/themeConfig';
@@ -71,14 +73,36 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
   const lastStorageError = workspaceService.getLastSaveError();
   const lastServerResult = workspaceService.getLastServerSaveResult();
 
+  const [serverLogs, setServerLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+  const fetchServerLogs = async () => {
+    setIsLoadingLogs(true);
+    try {
+      const res = await fetch('/api/debug/logs');
+      if (res.ok) {
+        const data = await res.json();
+        setServerLogs(data.logs || []);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch server debug logs:', e);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setCopiedPathType(null);
       setPhysicalDiskStatus('idle');
       setPhysicalDiskError(null);
       setPhysicalDiskDetails(null);
+      if (lastServerResult?.error) {
+        setShowDiagnostics(true);
+      }
+      fetchServerLogs();
     }
-  }, [isOpen]);
+  }, [isOpen, lastServerResult]);
 
   if (!isOpen) return null;
 
@@ -476,33 +500,85 @@ export const SaveSuccessModal: React.FC<SaveSuccessModalProps> = ({
 
             {showDiagnostics && (
               <div
-                className={`mt-2 p-3 rounded-xl border text-[10px] font-mono space-y-1.5 animate-in fade-in ${
+                className={`mt-2 p-3.5 rounded-xl border text-[10px] font-mono space-y-3 animate-in fade-in ${
                   isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
                 }`}
               >
-                <div>[Health] LocalStorage Access: {lastStorageError ? 'ERROR' : 'OK (Read/Write verified)'}</div>
-                <div>[Health] JSON Serialization: OK ({estimatedSizeKb} KB)</div>
-                <div>[Health] Active Storage Key: omnimind_workspaces_v1</div>
-                <div>[Health] Windows Backslash Path: {resolvedWindowsPath}</div>
-                <div>[Health] Unix URI Path: {fullPath}</div>
-                <div>[Health] Physical File System Access API: {typeof window !== 'undefined' && 'showSaveFilePicker' in window ? 'Supported' : 'Fallback to Blob Download'}</div>
-                <div>[Health] Server Disk Storage: {lastServerResult ? (lastServerResult.success ? `OK (${lastServerResult.bytes} bytes at ${lastServerResult.physicalPath})` : `FAILED (${lastServerResult.error})`) : 'Synchronized'}</div>
-                {lastServerResult?.error ? (
-                  <div className="text-rose-400 pt-1 border-t border-slate-800">
-                    [Server Disk Error] {lastServerResult.error}
-                    {lastServerResult.details && <div>{lastServerResult.details}</div>}
-                  </div>
-                ) : lastStorageError ? (
-                  <div className="text-rose-400 pt-1 border-t border-slate-800">
-                    [Error Timestamp] {lastStorageError.timestamp}
-                    <br />
-                    [Error Message] {lastStorageError.message}
-                  </div>
-                ) : (
-                  <div className="text-emerald-400 pt-1 border-t border-slate-800">
-                    [Status] Zero errors returned. Diagram state is safely stored on server disk.
+                <div className="space-y-1">
+                  <div>[Health] LocalStorage Access: {lastStorageError ? 'ERROR' : 'OK (Read/Write verified)'}</div>
+                  <div>[Health] JSON Serialization: OK ({estimatedSizeKb} KB)</div>
+                  <div>[Health] Active Storage Key: omnimind_workspaces_v1</div>
+                  <div>[Health] Windows Backslash Path: {resolvedWindowsPath}</div>
+                  <div>[Health] Unix URI Path: {fullPath}</div>
+                  <div>[Health] Server Disk Storage: {lastServerResult ? (lastServerResult.success ? `OK (${lastServerResult.bytes} bytes at ${lastServerResult.physicalPath})` : `FAILED (${lastServerResult.error})`) : 'Synchronized'}</div>
+                </div>
+
+                {lastServerResult?.error && (
+                  <div className="text-rose-400 p-2 rounded bg-rose-500/10 border border-rose-500/30">
+                    <div className="font-bold">[Server Disk Error] {lastServerResult.error}</div>
+                    {lastServerResult.details && <div className="mt-1 opacity-90">{lastServerResult.details}</div>}
                   </div>
                 )}
+
+                {/* Live Server Console Debug Messages Section */}
+                <div className="pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 font-bold text-sky-400">
+                      <Terminal className="w-3.5 h-3.5" />
+                      <span>Live Server Console Debug Messages:</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={fetchServerLogs}
+                      disabled={isLoadingLogs}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] cursor-pointer transition-colors"
+                      title="Fetch latest server debug logs"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isLoadingLogs ? 'animate-spin text-sky-400' : ''}`} />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800/80 max-h-48 overflow-y-auto space-y-1 font-mono text-[9.5px]">
+                    {serverLogs.length === 0 ? (
+                      <div className="text-slate-500 italic">No server logs captured yet or loading...</div>
+                    ) : (
+                      serverLogs.slice(-15).map((log, i) => (
+                        <div key={i} className="leading-tight flex items-start gap-1.5 break-all">
+                          <span className="text-slate-500 shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </span>
+                          <span
+                            className={`px-1 py-0.2 rounded font-bold uppercase shrink-0 text-[8.5px] ${
+                              log.level === 'error'
+                                ? 'bg-rose-500/20 text-rose-300'
+                                : log.level === 'warn'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : log.level === 'success'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : 'bg-sky-500/20 text-sky-300'
+                            }`}
+                          >
+                            {log.category}
+                          </span>
+                          <span
+                            className={
+                              log.level === 'error'
+                                ? 'text-rose-300 font-semibold'
+                                : log.level === 'success'
+                                ? 'text-emerald-300'
+                                : log.level === 'warn'
+                                ? 'text-amber-300'
+                                : 'text-slate-200'
+                            }
+                          >
+                            {log.message}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>

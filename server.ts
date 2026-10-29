@@ -23,6 +23,54 @@ const port = parseInt(process.env.PORT || '3000', 10);
 
 app.use(express.json({ limit: '20mb' }));
 
+// In-memory debug log buffer for inspection and UI display
+export interface ServerDebugLogEntry {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+  category: string;
+  message: string;
+  details?: any;
+}
+
+const serverDebugLogs: ServerDebugLogEntry[] = [];
+
+export function logDebug(
+  level: 'info' | 'warn' | 'error' | 'success',
+  category: string,
+  message: string,
+  details?: any
+) {
+  const timestamp = new Date().toISOString();
+  const entry: ServerDebugLogEntry = { timestamp, level, category, message, details };
+  serverDebugLogs.push(entry);
+  if (serverDebugLogs.length > 250) serverDebugLogs.shift();
+
+  const prefix = `[${timestamp}] [${category.toUpperCase()}]`;
+  if (level === 'error') {
+    console.error(`\x1b[31m${prefix} ERROR: ${message}\x1b[0m`, details ? JSON.stringify(details) : '');
+  } else if (level === 'warn') {
+    console.warn(`\x1b[33m${prefix} WARN: ${message}\x1b[0m`, details ? JSON.stringify(details) : '');
+  } else if (level === 'success') {
+    console.log(`\x1b[32m${prefix} SUCCESS: ${message}\x1b[0m`, details ? JSON.stringify(details) : '');
+  } else {
+    console.log(`\x1b[36m${prefix}\x1b[0m ${message}`, details ? JSON.stringify(details) : '');
+  }
+}
+
+// Global API Request logger middleware
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') && !req.path.includes('/api/debug/logs')) {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const status = res.statusCode;
+      const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+      logDebug(level, 'HTTP', `${req.method} ${req.originalUrl} -> ${status} (${duration}ms)`);
+    });
+  }
+  next();
+});
+
 // Server-side physical disk storage configurations
 const STORAGE_DIR = path.join(__dirname, 'storage_data');
 const CONFIG_FILE = path.join(__dirname, '.storage_root.txt');
@@ -459,13 +507,27 @@ app.get('/api/storage/config', (req: Request, res: Response) => {
   });
 });
 
+// 0. Server Debug Logs Endpoint for In-App and Diagnostics View
+app.get('/api/debug/logs', (req: Request, res: Response) => {
+  res.json({
+    total: serverDebugLogs.length,
+    platform: process.platform,
+    nodeVersion: process.version,
+    serverDataDir: STORAGE_DIR,
+    configuredRootDir: getConfiguredRootDir(),
+    logs: serverDebugLogs,
+  });
+});
+
 // 2. Update Root Directory Configuration
 app.post('/api/storage/config', (req: Request, res: Response) => {
   const { rootDir } = req.body;
   if (!rootDir || typeof rootDir !== 'string') {
+    logDebug('warn', 'STORAGE CONFIG', 'Rejected rootDir update: rootDir string is required');
     return res.status(400).json({ error: 'rootDir string is required' });
   }
   const updated = setConfiguredRootDir(rootDir);
+  logDebug('info', 'STORAGE CONFIG', `Configured root directory updated to: "${updated}"`);
   res.json({
     success: true,
     configuredRootDir: updated,
@@ -532,8 +594,10 @@ app.get('/api/workspaces', async (req: Request, res: Response) => {
       })
     );
 
+    logDebug('info', 'STORAGE', `Listed ${result.length} workspaces from server disk (${STORAGE_DIR})`);
     res.json(result);
   } catch (err: any) {
+    logDebug('error', 'STORAGE', `Failed to list workspaces on disk: ${err.message}`, err.stack);
     res.status(500).json({ error: err.message || 'Failed to list workspaces on server disk' });
   }
 });
@@ -547,8 +611,12 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
     const dataDir = path.join(wsDir, 'data');
     await fsp.mkdir(dataDir, { recursive: true });
 
-    // Create data/root.json starting point with requested diagramType template
     const rootPath = path.join(dataDir, 'root.json');
+    const winPath = toWindowsPath(getConfiguredRootDir(), safeId, 'root.json');
+
+    logDebug('info', 'STORAGE WORKSPACE', `Creating workspace "${safeId}" (Target Windows: ${winPath}, Server: ${rootPath})`);
+
+    // Create data/root.json starting point with requested diagramType template
     if (!fs.existsSync(rootPath)) {
       const templateDoc = req.body.templateDoc || {
         ...initialDiagramDocument,
@@ -556,6 +624,7 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
         name: `${req.body.name || safeId} Architecture`,
       };
       await fsp.writeFile(rootPath, JSON.stringify(templateDoc, null, 2), 'utf-8');
+      logDebug('success', 'STORAGE WORKSPACE', `Initialized root.json template in workspace "${safeId}"`);
     }
 
     res.status(201).json({
@@ -565,9 +634,10 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
       basePath: getConfiguredRootDir(),
       entrypoint: 'root.json',
       physicalPath: rootPath,
-      configuredPath: toWindowsPath(getConfiguredRootDir(), safeId, 'root.json'),
+      configuredPath: winPath,
     });
   } catch (err: any) {
+    logDebug('error', 'STORAGE WORKSPACE', `Failed to create workspace "${req.body?.name}": ${err.message}`, err.stack);
     res.status(500).json({ error: err.message || 'Failed to create workspace on server disk' });
   }
 });
@@ -578,8 +648,11 @@ app.delete('/api/workspaces/:workspaceId', async (req: Request, res: Response) =
     const safeWs = sanitizeName(req.params.workspaceId);
     const wsDir = path.join(STORAGE_DIR, safeWs);
 
+    logDebug('warn', 'STORAGE WORKSPACE', `Deleting workspace directory: "${safeWs}" at ${wsDir}`);
+
     if (fs.existsSync(wsDir)) {
       await fsp.rm(wsDir, { recursive: true, force: true });
+      logDebug('success', 'STORAGE WORKSPACE', `Successfully removed workspace directory: "${safeWs}"`);
       return res.json({
         success: true,
         workspaceId: safeWs,
@@ -587,8 +660,10 @@ app.delete('/api/workspaces/:workspaceId', async (req: Request, res: Response) =
       });
     }
 
+    logDebug('warn', 'STORAGE WORKSPACE', `Workspace directory not found for deletion: "${safeWs}"`);
     res.status(404).json({ error: `Workspace directory not found: ${safeWs}` });
   } catch (err: any) {
+    logDebug('error', 'STORAGE WORKSPACE', `Failed to delete workspace "${req.params.workspaceId}": ${err.message}`, err.stack);
     res.status(500).json({ error: err.message || 'Failed to delete workspace directory from server disk' });
   }
 });
@@ -601,25 +676,34 @@ app.get('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res
     if (!safeFile.endsWith('.json')) safeFile += '.json';
 
     let filePath = path.join(STORAGE_DIR, safeWs, 'data', safeFile);
+    const winPath = toWindowsPath(getConfiguredRootDir(), safeWs, safeFile);
+
+    logDebug('info', 'STORAGE READ', `Request to read diagram file "${safeFile}" from workspace "${safeWs}"`);
+
     if (!fs.existsSync(filePath)) {
       // Check legacy path without data/
       const legacyPath = path.join(STORAGE_DIR, safeWs, safeFile);
       if (fs.existsSync(legacyPath)) {
         filePath = legacyPath;
       } else {
+        logDebug('warn', 'STORAGE READ', `File not found on server disk: ${filePath} (Windows: ${winPath})`);
         return res.status(404).json({
           error: `File not found on server disk: ${safeFile}`,
           workspaceId: safeWs,
           physicalPath: filePath,
-          configuredPath: toWindowsPath(getConfiguredRootDir(), safeWs, safeFile),
+          configuredPath: winPath,
         });
       }
     }
 
     const content = await fsp.readFile(filePath, 'utf-8');
     const parsed = JSON.parse(content);
+    const bytes = Buffer.byteLength(content, 'utf-8');
+
+    logDebug('success', 'STORAGE READ', `Read ${bytes} bytes from ${filePath} for file "${safeFile}"`);
     res.json(parsed);
   } catch (err: any) {
+    logDebug('error', 'STORAGE READ', `Failed to read file ${req.params.filename}: ${err.message}`, err.stack);
     res.status(500).json({
       error: err.message || 'Failed to read file from server disk',
       details: String(err?.stack || err),
@@ -629,16 +713,49 @@ app.get('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res
 
 // 7. Save a specific JSON diagram file directly to <workspace>/data/<filename>
 app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res: Response) => {
+  const startTime = Date.now();
   try {
     const safeWs = sanitizeName(req.params.workspaceId);
     let safeFile = sanitizeName(req.params.filename);
     if (!safeFile.endsWith('.json')) safeFile += '.json';
+
+    const configuredRoot = getConfiguredRootDir();
+    const winPath = toWindowsPath(configuredRoot, safeWs, safeFile);
+
+    logDebug('info', 'STORAGE SAVE', `>>> Incoming SAVE for workspace="${safeWs}", file="${safeFile}"`);
+    logDebug('info', 'STORAGE SAVE', `Target Windows Path: "${winPath}"`);
+
+    // Validate request body
+    if (!req.body || typeof req.body !== 'object') {
+      logDebug('error', 'STORAGE SAVE', `Rejecting save: Request body is empty or not a JSON object`);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid diagram payload: Request body must be a valid JSON object',
+      });
+    }
+
+    const pagesCount = Array.isArray(req.body.pages) ? req.body.pages.length : 0;
+    let totalNodes = 0;
+    let totalEdges = 0;
+    if (Array.isArray(req.body.pages)) {
+      req.body.pages.forEach((p: any) => {
+        if (Array.isArray(p.nodes)) totalNodes += p.nodes.length;
+        if (Array.isArray(p.edges)) totalEdges += p.edges.length;
+      });
+    }
+
+    logDebug(
+      'info',
+      'STORAGE SAVE',
+      `Payload stats: Name="${req.body.name || safeFile}", Pages=${pagesCount}, Nodes=${totalNodes}, Edges=${totalEdges}`
+    );
 
     const dataDir = path.join(STORAGE_DIR, safeWs, 'data');
     await fsp.mkdir(dataDir, { recursive: true });
 
     const filePath = path.join(dataDir, safeFile);
     const jsonStr = JSON.stringify(req.body, null, 2);
+    const bytes = Buffer.byteLength(jsonStr, 'utf-8');
 
     await fsp.writeFile(filePath, jsonStr, 'utf-8');
 
@@ -647,20 +764,28 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
       documents.set(req.body.id, req.body);
     }
 
-    const configuredPath = toWindowsPath(getConfiguredRootDir(), safeWs, safeFile);
+    const duration = Date.now() - startTime;
+    logDebug(
+      'success',
+      'STORAGE SAVE',
+      `Written ${bytes} bytes to ${filePath} (${duration}ms). Windows Path: ${winPath}`
+    );
 
     res.json({
       success: true,
       workspaceId: safeWs,
       filename: safeFile,
       isRoot: safeFile === 'root.json',
-      bytes: Buffer.byteLength(jsonStr, 'utf-8'),
+      bytes,
       physicalPath: filePath,
-      configuredPath,
+      configuredPath: winPath,
       timestamp: new Date().toISOString(),
+      durationMs: duration,
+      stats: { pages: pagesCount, nodes: totalNodes, edges: totalEdges },
       message: `Successfully written ${safeFile} to server disk at ${filePath}`,
     });
   } catch (err: any) {
+    logDebug('error', 'STORAGE SAVE', `FAILED to save diagram: ${err.message}`, err.stack);
     res.status(500).json({
       success: false,
       error: err.message || 'Failed to write file to server disk',
@@ -677,19 +802,25 @@ app.delete('/api/workspaces/:workspaceId/files/:filename', async (req: Request, 
     if (!safeFile.endsWith('.json')) safeFile += '.json';
 
     if (safeFile === 'root.json') {
+      logDebug('warn', 'STORAGE DELETE', `Attempted to delete root.json in workspace "${safeWs}" - blocked`);
       return res.status(400).json({
         error: 'Cannot delete root.json: every workspace requires a root.json file in its data directory as its starting entrypoint.',
       });
     }
 
     const filePath = path.join(STORAGE_DIR, safeWs, 'data', safeFile);
+    logDebug('warn', 'STORAGE DELETE', `Deleting diagram file "${safeFile}" from workspace "${safeWs}" (path: ${filePath})`);
+
     if (fs.existsSync(filePath)) {
       await fsp.unlink(filePath);
+      logDebug('success', 'STORAGE DELETE', `Deleted ${safeFile} from disk`);
       return res.json({ success: true, message: `Deleted ${safeFile} from server disk` });
     }
 
+    logDebug('warn', 'STORAGE DELETE', `File does not exist on disk for deletion: ${filePath}`);
     res.status(404).json({ error: 'File does not exist on server disk' });
   } catch (err: any) {
+    logDebug('error', 'STORAGE DELETE', `Failed to delete file ${req.params.filename}: ${err.message}`, err.stack);
     res.status(500).json({ error: err.message || 'Failed to delete file from server disk' });
   }
 });

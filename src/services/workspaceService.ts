@@ -557,6 +557,9 @@ class WorkspaceService {
     const ws = this.getActiveWorkspace();
     const filename = customFilename || ws.activeDiagramFilename || 'root.json';
 
+    const targetPath = this.getWindowsFullPath(ws.id, filename);
+    console.log(`[Storage Save] 💾 Sending save to server: workspace="${ws.id}", file="${filename}" (Target: ${targetPath})`);
+
     try {
       const resp = await fetch(`/api/workspaces/${ws.id}/files/${filename}`, {
         method: 'POST',
@@ -573,6 +576,7 @@ class WorkspaceService {
           error: errData.error || `Server HTTP ${resp.status}`,
           details: errData.details,
         };
+        console.error(`[Storage Save] ❌ Save FAILED (HTTP ${resp.status}):`, failure.error, failure.details);
         this.lastServerSaveResult = failure;
         this.notify();
         return failure;
@@ -589,6 +593,7 @@ class WorkspaceService {
         configuredPath: data.configuredPath,
         timestamp: data.timestamp || new Date().toISOString(),
       };
+      console.log(`[Storage Save] ✅ Save SUCCESS: ${data.configuredPath} -> Server Path: ${data.physicalPath} (${data.bytes} bytes)`);
       this.lastServerSaveResult = successResult;
       this.notify();
       return successResult;
@@ -600,6 +605,7 @@ class WorkspaceService {
         error: err?.message || 'Could not connect to server storage API',
         details: String(err?.stack || err),
       };
+      console.error(`[Storage Save] ❌ Network/Connection error during save:`, failure.error, failure.details);
       this.lastServerSaveResult = failure;
       this.notify();
       return failure;
