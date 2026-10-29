@@ -161,7 +161,12 @@ export type AppTheme =
   | 'cyberpunk'
   | 'parchment'
   | 'nord'
-  | 'monochrome';
+  | 'monochrome'
+  | 'pastel-mint'
+  | 'pastel-rose'
+  | 'pastel-lavender'
+  | 'pastel-peach'
+  | 'pastel-sky';
 
 export type GridStyle = 'dots' | 'lines' | 'crosshairs' | 'none';
 

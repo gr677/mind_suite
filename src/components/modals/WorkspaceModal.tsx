@@ -20,7 +20,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { workspaceService, Workspace } from '../../services/workspaceService';
-import { DiagramDocument, AppTheme } from '../../types/diagram';
+import { DiagramDocument, AppTheme, DiagramType } from '../../types/diagram';
 import { THEMES } from '../../utils/themeConfig';
 
 interface WorkspaceModalProps {
@@ -41,6 +41,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   const [newWsName, setNewWsName] = useState('');
   const [newDiagramName, setNewDiagramName] = useState('');
   const [newDiagramFilename, setNewDiagramFilename] = useState('');
+  const [newWsDiagramType, setNewWsDiagramType] = useState<DiagramType>('bpmn');
   const [isCreatingWs, setIsCreatingWs] = useState(false);
   const [isCreatingDiagram, setIsCreatingDiagram] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
@@ -85,7 +86,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   const handleCreateWorkspace = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWsName.trim()) return;
-    const ws = workspaceService.createWorkspace(newWsName.trim());
+    const ws = workspaceService.createWorkspace(newWsName.trim(), newWsDiagramType);
     setActiveWs(ws);
     setNewWsName('');
     setIsCreatingWs(false);
@@ -214,6 +215,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 {activeWs.basePath}/
               </span>
               <span className="text-amber-500 font-bold">{activeWs.name}/</span>
+              <span className="text-emerald-400 font-bold">data/</span>
               <span className="text-sky-500 font-bold">{activeWs.activeDiagramFilename}</span>
             </div>
           </div>
@@ -280,19 +282,59 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                     : 'bg-white border-amber-500/60 shadow-sm'
                 }`}
               >
-                <input
-                  type="text"
-                  placeholder="e.g. workspace2, cloud_prod..."
-                  value={newWsName}
-                  onChange={e => setNewWsName(e.target.value)}
-                  autoFocus
-                  className={`w-full px-2.5 py-1.5 rounded text-xs focus:outline-none focus:border-amber-400 font-mono border ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500'
-                      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
-                  }`}
-                />
-                <div className="flex justify-end gap-1.5">
+                <div>
+                  <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
+                    Directory Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. workspace2, cloud_prod..."
+                    value={newWsName}
+                    onChange={e => setNewWsName(e.target.value)}
+                    autoFocus
+                    className={`w-full px-2.5 py-1.5 rounded text-xs focus:outline-none focus:border-amber-400 font-mono border ${
+                      isDark
+                        ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500'
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
+                    Starting Diagram Type (data\root.json)
+                  </label>
+                  <select
+                    value={newWsDiagramType}
+                    onChange={e => setNewWsDiagramType(e.target.value as DiagramType)}
+                    className={`w-full px-2 py-1.5 rounded text-xs font-mono border focus:outline-none ${
+                      isDark
+                        ? 'bg-slate-950 border-slate-700 text-white'
+                        : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  >
+                    <option value="generic">Universal Freeform (All Shapes)</option>
+                    <option value="bpmn">BPMN 2.0 Business Process</option>
+                    <option value="erd">Entity Relationship (ERD)</option>
+                    <option value="flowchart">Standard Flowchart</option>
+                    <option value="uml">UML Class Diagram</option>
+                    <option value="uml-sequence">UML Sequence Diagram</option>
+                    <option value="uml-usecase">UML Use Case</option>
+                    <option value="uml-state">UML State Machine</option>
+                    <option value="dfd">Data Flow Diagram (DFD)</option>
+                    <option value="idef0">IDEF0 Functional Model</option>
+                    <option value="ceqa">CEQA Environmental</option>
+                    <option value="mindmap">Mind Map</option>
+                    <option value="gantt">Gantt Timelines</option>
+                    <option value="pert">PERT Network</option>
+                    <option value="c4">C4 Architecture</option>
+                    <option value="vsm">Value Stream Map (VSM)</option>
+                    <option value="sipoc">SIPOC Matrix</option>
+                    <option value="fishbone">Fishbone Ishikawa</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-1.5 pt-1">
                   <button
                     type="button"
                     onClick={() => setIsCreatingWs(false)}

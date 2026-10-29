@@ -41,13 +41,14 @@ export interface ServerSaveResult {
 }
 
 const STORAGE_KEY = 'omnimind_workspaces_v1';
-const DEFAULT_BASE_PATH = 'c:/omnimind/data';
+const DEFAULT_BASE_PATH = 'c:/omnimind';
 
 class WorkspaceService {
   private store: WorkspaceStore;
   private listeners: Array<() => void> = [];
   private lastSaveError: { message: string; timestamp: string; details?: string } | null = null;
   private lastServerSaveResult: ServerSaveResult | null = null;
+  private serverSaveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.store = this.loadStore();
@@ -138,10 +139,28 @@ class WorkspaceService {
       const wsResp = await fetch('/api/workspaces');
       if (wsResp.ok) {
         const serverWorkspaces: any[] = await wsResp.json();
+        let changed = false;
         for (const sw of serverWorkspaces) {
           if (!this.store.workspaces[sw.id]) {
-            this.createWorkspace(sw.name || sw.id, sw.basePath);
+            this.store.workspaces[sw.id] = {
+              id: sw.id,
+              name: sw.name || sw.id,
+              basePath: sw.basePath || DEFAULT_BASE_PATH,
+              activeDiagramFilename: 'root.json',
+              diagrams: {
+                'root.json': {
+                  filename: 'root.json',
+                  name: `${sw.name || sw.id} Root Architecture`,
+                  lastModified: new Date().toISOString(),
+                  document: initialDiagramDocument,
+                },
+              },
+            };
+            changed = true;
           }
+        }
+        if (changed) {
+          this.saveStore();
         }
       }
     } catch (err) {
@@ -220,7 +239,7 @@ class WorkspaceService {
 
   public getActiveWorkspacePath(): string {
     const ws = this.getActiveWorkspace();
-    return `${ws.basePath}/${ws.name}/${ws.activeDiagramFilename}`;
+    return `${ws.basePath}/${ws.name}/data/${ws.activeDiagramFilename}`;
   }
 
   public getActiveDiagram(): WorkspaceDiagram {
@@ -254,10 +273,10 @@ class WorkspaceService {
 
   public getFullPath(workspaceId?: string, filename?: string): string {
     const ws = workspaceId ? this.store.workspaces[workspaceId] : this.getActiveWorkspace();
-    if (!ws) return `${DEFAULT_BASE_PATH}/workspace1/root.json`;
+    if (!ws) return `${DEFAULT_BASE_PATH}/workspace1/data/root.json`;
     const fn = filename || ws.activeDiagramFilename || 'root.json';
     const basePath = (ws.basePath || DEFAULT_BASE_PATH).replace(/\/$/, '');
-    return `${basePath}/${ws.name}/${fn}`;
+    return `${basePath}/${ws.name}/data/${fn}`;
   }
 
   public getWindowsFullPath(workspaceId?: string, filename?: string): string {
@@ -355,10 +374,36 @@ class WorkspaceService {
     return this.getActiveWorkspace();
   }
 
-  public createWorkspace(name: string, basePath?: string): Workspace {
+  public createWorkspace(name: string, diagramType: DiagramType = 'generic', basePath?: string): Workspace {
     const safeId = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || `workspace_${Date.now()}`;
     const id = this.store.workspaces[safeId] ? `${safeId}_${Date.now().toString().slice(-4)}` : safeId;
     const cleanBasePath = (basePath || this.getActiveWorkspace()?.basePath || DEFAULT_BASE_PATH).trim();
+
+    let starterDoc: DiagramDocument;
+    if (diagramType && diagramType !== 'generic') {
+      const starterPage = getExampleDiagramForType(diagramType);
+      starterDoc = {
+        id: `doc-${id}-root`,
+        name: `${name.trim()} Architecture`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        activePageId: starterPage.id,
+        settings: {
+          gridSnap: true,
+          showGrid: true,
+          theme: 'dark',
+          showMinimap: true,
+        },
+        versions: [],
+        pages: [starterPage],
+      };
+    } else {
+      starterDoc = {
+        ...initialDiagramDocument,
+        id: `doc-${id}-root`,
+        name: `${name.trim()} Architecture`,
+      };
+    }
 
     const newWorkspace: Workspace = {
       id,
@@ -370,11 +415,7 @@ class WorkspaceService {
           filename: 'root.json',
           name: `${name.trim()} Root Architecture`,
           lastModified: new Date().toISOString(),
-          document: {
-            ...initialDiagramDocument,
-            id: `doc-${id}-root`,
-            name: `${name.trim()} Architecture`,
-          },
+          document: starterDoc,
         },
       },
     };
@@ -383,11 +424,11 @@ class WorkspaceService {
     this.store.activeWorkspaceId = id;
     this.saveStore();
 
-    // Also register on server disk
+    // Also register on server disk in <workspace>/data/root.json
     fetch('/api/workspaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), id }),
+      body: JSON.stringify({ name: name.trim(), id, diagramType, templateDoc: starterDoc }),
     }).catch(err => {
       console.warn('[WorkspaceService] Note: Failed to create workspace on server disk:', err);
     });
@@ -450,6 +491,14 @@ class WorkspaceService {
       this.store.activeWorkspaceId = Object.keys(this.store.workspaces)[0];
     }
     this.saveStore();
+
+    // Also remove entire workspace folder from server disk
+    fetch(`/api/workspaces/${id}`, {
+      method: 'DELETE',
+    }).catch(err => {
+      console.warn('[WorkspaceService] Failed to delete workspace directory on server:', err);
+    });
+
     return true;
   }
 
@@ -474,10 +523,31 @@ class WorkspaceService {
     };
     this.saveStore();
 
-    // Trigger server-side disk write
-    this.saveCurrentDiagramToServer(doc, filename).catch(err => {
-      console.warn('[WorkspaceService] Failed saving diagram to server:', err);
-    });
+    // Debounce server disk write by 1500ms to avoid overwhelming disk on rapid canvas edits
+    if (this.serverSaveDebounceTimer) {
+      clearTimeout(this.serverSaveDebounceTimer);
+    }
+    this.serverSaveDebounceTimer = setTimeout(() => {
+      this.saveCurrentDiagramToServer(doc, filename).catch(err => {
+        console.warn('[WorkspaceService] Background save to server notice:', err);
+      });
+    }, 1500);
+  }
+
+  public updateLocalDiagramCache(filename: string, doc: DiagramDocument): void {
+    const ws = this.getActiveWorkspace();
+    const safeFilename = filename || ws.activeDiagramFilename || 'root.json';
+    ws.diagrams[safeFilename] = {
+      filename: safeFilename,
+      name: doc.name || safeFilename.replace('.json', ''),
+      lastModified: new Date().toISOString(),
+      document: doc,
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.store));
+    } catch {
+      // ignore
+    }
   }
 
   public async saveCurrentDiagramToServer(

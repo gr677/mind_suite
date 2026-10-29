@@ -143,7 +143,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </button>
         )}
 
-        {/* Workspace Storage Path Pill (Change 4: c:/omnimind/data/workspace1/diagram1.json) */}
+        {/* Workspace Storage Path Pill (C:\omnimind\<workspace>\data\root.json) */}
         <button
           onClick={onOpenWorkspaceModal}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all cursor-pointer shadow-sm group shrink-0 ${
@@ -151,13 +151,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               ? 'bg-slate-900 border-slate-800 hover:border-amber-500/50 hover:bg-slate-850 text-slate-300 hover:text-white'
               : 'bg-slate-100 border-slate-200 hover:border-amber-500/50 hover:bg-slate-200 text-slate-700 hover:text-slate-900'
           }`}
-          title={`Click to manage workspaces & diagrams (c:/omnimind/data/${activeWorkspaceName || 'workspace1'}/${activeDiagramFilename || 'diagram1.json'})`}
+          title={`Click to manage workspaces & diagrams (C:\\omnimind\\${activeWorkspaceName || 'workspace1'}\\data\\${activeDiagramFilename || 'root.json'})`}
         >
           <Folder className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" />
-          <span className={`hidden xl:inline ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>c:/omnimind/data/</span>
+          <span className={`hidden xl:inline ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>C:\omnimind\</span>
           <span className={`${isDark ? 'text-amber-300' : 'text-amber-700'} font-bold`}>{activeWorkspaceName || 'workspace1'}</span>
-          <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>/</span>
-          <span className={`${isDark ? 'text-sky-300' : 'text-sky-700'} font-bold`}>{activeDiagramFilename || 'diagram1.json'}</span>
+          <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>\data\</span>
+          <span className={`${isDark ? 'text-sky-300' : 'text-sky-700'} font-bold`}>{activeDiagramFilename || 'root.json'}</span>
         </button>
 
         {/* Save Diagram Button */}

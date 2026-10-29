@@ -49,7 +49,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'themes' | 'saving' | 'canvas' | 'shortcuts'>('themes');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
-  const [rootDirInput, setRootDirInput] = useState(() => settings.rootDir || 'C:\\omnimind\\data');
+  const [rootDirInput, setRootDirInput] = useState(() => settings.rootDir || 'C:\\omnimind');
   const [rootDirSavedMsg, setRootDirSavedMsg] = useState(false);
 
   if (!isOpen) return null;
@@ -67,7 +67,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleSaveRootDir = async () => {
-    const trimmed = (rootDirInput || 'C:\\omnimind\\data').trim();
+    const trimmed = (rootDirInput || 'C:\\omnimind').trim();
     onUpdateSettings({ ...settings, rootDir: trimmed });
     await workspaceService.updateServerRootDir(trimmed);
     setRootDirSavedMsg(true);
@@ -199,7 +199,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div>
                   <h3 className="font-semibold text-sm">Color Themes</h3>
                   <p className={`text-xs ${currentThemeDef.isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Choose from 6 visual themes calibrated for architectural and modeling clarity.
+                    Choose from 11 visual themes including high-contrast dark modes, clean light styles, and soft pastel shades (Mint, Rose, Lavender, Peach, Sky).
                   </p>
                 </div>
                 <span className="px-2.5 py-1 rounded-full text-xs font-mono bg-blue-600/20 text-blue-400 border border-blue-500/30">
@@ -350,7 +350,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="text"
                     value={rootDirInput}
                     onChange={e => setRootDirInput(e.target.value)}
-                    placeholder="e.g. C:\omnimind\data or c:/omnimind/data"
+                    placeholder="e.g. C:\omnimind or c:/omnimind"
                     className={`flex-1 px-3 py-2 rounded-xl text-xs font-mono border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
                       currentThemeDef.isDark
                         ? 'bg-slate-900 border-slate-700 text-slate-100 placeholder-slate-500'
@@ -369,7 +369,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between text-[11px] font-mono pt-1 text-slate-400 border-t border-slate-800/40">
                   <span>Workspace Starting Point Example:</span>
                   <span className="text-sky-400 font-semibold truncate max-w-[65%]">
-                    {(rootDirInput || 'C:\\omnimind\\data').replace(/[\/\\]+$/, '')}\workspace1\root.json
+                    {(rootDirInput || 'C:\\omnimind').replace(/[\/\\]+$/, '')}\workspace1\data\root.json
                   </span>
                 </div>
               </div>

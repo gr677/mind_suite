@@ -26,7 +26,7 @@ app.use(express.json({ limit: '20mb' }));
 // Server-side physical disk storage configurations
 const STORAGE_DIR = path.join(__dirname, 'storage_data');
 const CONFIG_FILE = path.join(__dirname, '.storage_root.txt');
-const DEFAULT_CONFIGURED_ROOT = 'c:/omnimind/data';
+const DEFAULT_CONFIGURED_ROOT = 'c:/omnimind';
 
 function getConfiguredRootDir(): string {
   try {
@@ -57,30 +57,35 @@ function sanitizeName(name: string): string {
 
 function toWindowsPath(base: string, workspace: string, filename: string): string {
   const normBase = (base || DEFAULT_CONFIGURED_ROOT).replace(/\/+/g, '\\').replace(/\\+$/, '');
-  let win = `${normBase}\\${workspace}\\${filename}`;
+  let win = `${normBase}\\${workspace}\\data\\${filename}`;
   if (/^[a-z]:\\/i.test(win)) {
     win = win.charAt(0).toUpperCase() + win.slice(1);
   }
   return win;
 }
 
-// Ensure storage directories and default workspace with root.json exist on disk
+// Ensure storage directories and default workspace with data/root.json exist on disk
 async function initStorageOnDisk() {
   try {
     await fsp.mkdir(STORAGE_DIR, { recursive: true });
     const ws1Dir = path.join(STORAGE_DIR, 'workspace1');
-    await fsp.mkdir(ws1Dir, { recursive: true });
+    const ws1DataDir = path.join(ws1Dir, 'data');
+    await fsp.mkdir(ws1DataDir, { recursive: true });
 
-    const rootFile = path.join(ws1Dir, 'root.json');
+    const rootFileInData = path.join(ws1DataDir, 'root.json');
+    const rootFileInWs = path.join(ws1Dir, 'root.json');
     const legacyDiagram1 = path.join(ws1Dir, 'diagram1.json');
 
-    if (!fs.existsSync(rootFile)) {
-      if (fs.existsSync(legacyDiagram1)) {
-        await fsp.copyFile(legacyDiagram1, rootFile);
-        console.log('[Storage] Migrated workspace1/diagram1.json -> workspace1/root.json on server disk');
+    if (!fs.existsSync(rootFileInData)) {
+      if (fs.existsSync(rootFileInWs)) {
+        await fsp.copyFile(rootFileInWs, rootFileInData);
+        console.log('[Storage] Moved workspace1/root.json -> workspace1/data/root.json on server disk');
+      } else if (fs.existsSync(legacyDiagram1)) {
+        await fsp.copyFile(legacyDiagram1, rootFileInData);
+        console.log('[Storage] Migrated workspace1/diagram1.json -> workspace1/data/root.json on server disk');
       } else {
-        await fsp.writeFile(rootFile, JSON.stringify(initialDiagramDocument, null, 2), 'utf-8');
-        console.log('[Storage] Initialized workspace1/root.json on server disk');
+        await fsp.writeFile(rootFileInData, JSON.stringify(initialDiagramDocument, null, 2), 'utf-8');
+        console.log('[Storage] Initialized workspace1/data/root.json on server disk');
       }
     }
   } catch (err) {
@@ -468,7 +473,7 @@ app.post('/api/storage/config', (req: Request, res: Response) => {
   });
 });
 
-// 3. List all workspaces and their files on server disk
+// 3. List all workspaces and their files on server disk (in <workspace>/data/)
 app.get('/api/workspaces', async (req: Request, res: Response) => {
   try {
     await initStorageOnDisk();
@@ -479,12 +484,22 @@ app.get('/api/workspaces', async (req: Request, res: Response) => {
       workspaceFolders.map(async folder => {
         const wsId = folder.name;
         const wsPath = path.join(STORAGE_DIR, wsId);
-        const fileEntries = await fsp.readdir(wsPath, { withFileTypes: true });
+        const dataPath = path.join(wsPath, 'data');
+        await fsp.mkdir(dataPath, { recursive: true });
+
+        // Migrate root.json from parent if it was placed there previously
+        const rootInParent = path.join(wsPath, 'root.json');
+        const rootInData = path.join(dataPath, 'root.json');
+        if (fs.existsSync(rootInParent) && !fs.existsSync(rootInData)) {
+          await fsp.copyFile(rootInParent, rootInData);
+        }
+
+        const fileEntries = await fsp.readdir(dataPath, { withFileTypes: true });
         const jsonFiles = fileEntries.filter(f => f.isFile() && f.name.endsWith('.json'));
 
         const files = await Promise.all(
           jsonFiles.map(async file => {
-            const filePath = path.join(wsPath, file.name);
+            const filePath = path.join(dataPath, file.name);
             const stats = await fsp.stat(filePath);
             let name = file.name.replace('.json', '');
             try {
@@ -523,18 +538,19 @@ app.get('/api/workspaces', async (req: Request, res: Response) => {
   }
 });
 
-// 4. Create new workspace on server disk
+// 4. Create new workspace on server disk with data/root.json
 app.post('/api/workspaces', async (req: Request, res: Response) => {
   try {
     const rawName = req.body.name || `workspace_${Date.now()}`;
     const safeId = sanitizeName(rawName.trim().toLowerCase()) || `workspace_${Date.now()}`;
     const wsDir = path.join(STORAGE_DIR, safeId);
-    await fsp.mkdir(wsDir, { recursive: true });
+    const dataDir = path.join(wsDir, 'data');
+    await fsp.mkdir(dataDir, { recursive: true });
 
-    // Create root.json starting point
-    const rootPath = path.join(wsDir, 'root.json');
+    // Create data/root.json starting point with requested diagramType template
+    const rootPath = path.join(dataDir, 'root.json');
     if (!fs.existsSync(rootPath)) {
-      const templateDoc = {
+      const templateDoc = req.body.templateDoc || {
         ...initialDiagramDocument,
         id: `doc-${safeId}-root`,
         name: `${req.body.name || safeId} Architecture`,
@@ -548,7 +564,7 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
       name: req.body.name || safeId,
       basePath: getConfiguredRootDir(),
       entrypoint: 'root.json',
-      physicalPath: wsDir,
+      physicalPath: rootPath,
       configuredPath: toWindowsPath(getConfiguredRootDir(), safeId, 'root.json'),
     });
   } catch (err: any) {
@@ -556,22 +572,48 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
   }
 });
 
-// 5. Get a specific JSON diagram file from server disk
+// 5. Delete an entire workspace directory from server disk
+app.delete('/api/workspaces/:workspaceId', async (req: Request, res: Response) => {
+  try {
+    const safeWs = sanitizeName(req.params.workspaceId);
+    const wsDir = path.join(STORAGE_DIR, safeWs);
+
+    if (fs.existsSync(wsDir)) {
+      await fsp.rm(wsDir, { recursive: true, force: true });
+      return res.json({
+        success: true,
+        workspaceId: safeWs,
+        message: `Deleted workspace directory ${safeWs} from server disk.`,
+      });
+    }
+
+    res.status(404).json({ error: `Workspace directory not found: ${safeWs}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to delete workspace directory from server disk' });
+  }
+});
+
+// 6. Get a specific JSON diagram file from server disk (checking <workspace>/data/<filename>)
 app.get('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res: Response) => {
   try {
     const safeWs = sanitizeName(req.params.workspaceId);
     let safeFile = sanitizeName(req.params.filename);
     if (!safeFile.endsWith('.json')) safeFile += '.json';
 
-    const filePath = path.join(STORAGE_DIR, safeWs, safeFile);
-
+    let filePath = path.join(STORAGE_DIR, safeWs, 'data', safeFile);
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        error: `File not found on server disk: ${safeFile}`,
-        workspaceId: safeWs,
-        physicalPath: filePath,
-        configuredPath: toWindowsPath(getConfiguredRootDir(), safeWs, safeFile),
-      });
+      // Check legacy path without data/
+      const legacyPath = path.join(STORAGE_DIR, safeWs, safeFile);
+      if (fs.existsSync(legacyPath)) {
+        filePath = legacyPath;
+      } else {
+        return res.status(404).json({
+          error: `File not found on server disk: ${safeFile}`,
+          workspaceId: safeWs,
+          physicalPath: filePath,
+          configuredPath: toWindowsPath(getConfiguredRootDir(), safeWs, safeFile),
+        });
+      }
     }
 
     const content = await fsp.readFile(filePath, 'utf-8');
@@ -585,17 +627,17 @@ app.get('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res
   }
 });
 
-// 6. Save a specific JSON diagram file directly to server disk
+// 7. Save a specific JSON diagram file directly to <workspace>/data/<filename>
 app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res: Response) => {
   try {
     const safeWs = sanitizeName(req.params.workspaceId);
     let safeFile = sanitizeName(req.params.filename);
     if (!safeFile.endsWith('.json')) safeFile += '.json';
 
-    const wsDir = path.join(STORAGE_DIR, safeWs);
-    await fsp.mkdir(wsDir, { recursive: true });
+    const dataDir = path.join(STORAGE_DIR, safeWs, 'data');
+    await fsp.mkdir(dataDir, { recursive: true });
 
-    const filePath = path.join(wsDir, safeFile);
+    const filePath = path.join(dataDir, safeFile);
     const jsonStr = JSON.stringify(req.body, null, 2);
 
     await fsp.writeFile(filePath, jsonStr, 'utf-8');
@@ -616,7 +658,7 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
       physicalPath: filePath,
       configuredPath,
       timestamp: new Date().toISOString(),
-      message: `Successfully written ${safeFile} to server disk.`,
+      message: `Successfully written ${safeFile} to server disk at ${filePath}`,
     });
   } catch (err: any) {
     res.status(500).json({
@@ -627,7 +669,7 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
   }
 });
 
-// 7. Delete a diagram file from server disk
+// 8. Delete a diagram file from <workspace>/data/
 app.delete('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res: Response) => {
   try {
     const safeWs = sanitizeName(req.params.workspaceId);
@@ -636,11 +678,11 @@ app.delete('/api/workspaces/:workspaceId/files/:filename', async (req: Request, 
 
     if (safeFile === 'root.json') {
       return res.status(400).json({
-        error: 'Cannot delete root.json: every workspace requires a root.json file as its starting entrypoint.',
+        error: 'Cannot delete root.json: every workspace requires a root.json file in its data directory as its starting entrypoint.',
       });
     }
 
-    const filePath = path.join(STORAGE_DIR, safeWs, safeFile);
+    const filePath = path.join(STORAGE_DIR, safeWs, 'data', safeFile);
     if (fs.existsSync(filePath)) {
       await fsp.unlink(filePath);
       return res.json({ success: true, message: `Deleted ${safeFile} from server disk` });
@@ -659,7 +701,12 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: ['**/storage_data/**', '**/.storage_root.txt**', '**/node_modules/**'],
+        },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

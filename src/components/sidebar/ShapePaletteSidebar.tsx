@@ -32,6 +32,8 @@ import {
   Archive,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
+import { WorkspaceDropdown } from './WorkspaceDropdown';
+import { DiagramDocument } from '../../types/diagram';
 
 interface ShapePaletteSidebarProps {
   currentDiagramType: DiagramType;
@@ -41,6 +43,7 @@ interface ShapePaletteSidebarProps {
   onSelectCategory: (cat: string) => void;
   onSelectTemplate: (templateId: string) => void;
   onOpenGallery: () => void;
+  onLoadDiagram?: (doc: DiagramDocument) => void;
 }
 
 export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
@@ -51,6 +54,7 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
   onSelectCategory,
   onSelectTemplate,
   onOpenGallery,
+  onLoadDiagram,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -129,9 +133,14 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
 
   return (
     <div className={`w-64 h-full border-r flex flex-col shrink-0 select-none transition-colors duration-150 ${themeDef.sidebarClass}`}>
-      {/* Sidebar Header */}
+      {/* Sidebar Header with Workspace Dropdown & Shape Library */}
       <div className={`p-3 border-b space-y-2.5 ${themeDef.borderClass}`}>
-        <div className="flex items-center justify-between">
+        {/* Workspace Dropdown directly above Shape Library */}
+        {onLoadDiagram && (
+          <WorkspaceDropdown onLoadDiagram={onLoadDiagram} theme={theme} />
+        )}
+
+        <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400">
               <Grid className="w-4 h-4" />

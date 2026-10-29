@@ -196,7 +196,7 @@ export default function App() {
             const data: DiagramDocument = await fileRes.json();
             setDocument(data);
             offlineSyncService.cacheDocument(data);
-            workspaceService.saveCurrentDiagram(data);
+            workspaceService.updateLocalDiagramCache(targetFilename, data);
             return;
           }
 
@@ -205,7 +205,7 @@ export default function App() {
             const data: DiagramDocument = await res.json();
             setDocument(data);
             offlineSyncService.cacheDocument(data);
-            workspaceService.saveCurrentDiagram(data);
+            workspaceService.updateLocalDiagramCache('root.json', data);
           }
         } catch (err) {
           console.warn('Using offline cached document on startup:', err);
@@ -654,7 +654,19 @@ export default function App() {
   }, [document, persistDocument, activeWs]);
 
   const handleToggleTheme = useCallback(() => {
-    const themeKeys: AppTheme[] = ['dark', 'light', 'cyberpunk', 'parchment', 'nord', 'monochrome'];
+    const themeKeys: AppTheme[] = [
+      'dark',
+      'light',
+      'pastel-mint',
+      'pastel-rose',
+      'pastel-lavender',
+      'pastel-peach',
+      'pastel-sky',
+      'parchment',
+      'nord',
+      'cyberpunk',
+      'monochrome',
+    ];
     const nextIdx = (themeKeys.indexOf(settings.theme) + 1) % themeKeys.length;
     handleUpdateSettings({ ...settings, theme: themeKeys[nextIdx] });
   }, [settings, handleUpdateSettings]);
@@ -729,6 +741,7 @@ export default function App() {
             handleDropNewShape(templateId, 240, 200);
           }}
           onOpenGallery={() => setIsGalleryOpen(true)}
+          onLoadDiagram={handleLoadWorkspaceDiagram}
         />
 
         {/* Center: Infinite Interactive Diagram Canvas */}
