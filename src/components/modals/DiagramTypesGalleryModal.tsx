@@ -32,6 +32,7 @@ import {
   TrendingUp,
   GitBranch,
   X,
+  Lock,
 } from 'lucide-react';
 
 interface DiagramTypesGalleryModalProps {
@@ -146,7 +147,7 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
                 </span>
               </div>
               <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Select from any standard modeling notation: ERD, BPMN, UML, DFD, IDEF0, CEQA, SIPOC, PERT, Gantt, C4 &amp; more.
+                Diagram format is locked on creation to preserve structure. Use <strong>Filter Shapes</strong> to create and drop objects from ANY diagram type on your active canvas, or click <strong>New Page</strong> to start a new diagram.
               </p>
             </div>
           </div>
@@ -338,10 +339,14 @@ export const DiagramTypesGalleryModal: React.FC<DiagramTypesGalleryModalProps> =
               : 'border-slate-200 bg-slate-50 text-slate-600'
           }`}
         >
-          <span>
-            Current Active Model:{' '}
-            <strong className="text-blue-500 uppercase font-mono">{currentType}</strong>
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Diagram Format: <strong className="text-blue-500 uppercase font-mono">{currentType}</strong></span>
+              <span className="text-[10px] text-amber-400 font-mono font-semibold">(Locked)</span>
+            </span>
+            <span className="text-[11px] opacity-60">• Mix and match shapes from any diagram standard freely</span>
+          </div>
           <button
             onClick={onClose}
             className={`px-4 py-1.5 rounded font-medium cursor-pointer transition-colors ${

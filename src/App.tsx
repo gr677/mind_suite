@@ -737,11 +737,7 @@ export default function App() {
           selectedCategory={selectedCategory}
           theme={settings.theme}
           onSelectCategory={cat => {
-            if (cat === 'all' || cat === 'notes' || cat === 'containers') {
-              setSelectedCategory(cat);
-            } else {
-              handleFlipDiagramType(cat as DiagramType);
-            }
+            setSelectedCategory(cat);
           }}
           onSelectTemplate={templateId => {
             handleDropNewShape(templateId, 240, 200);
@@ -825,12 +821,12 @@ export default function App() {
         onClose={() => setIsGalleryOpen(false)}
         currentType={currentPage.diagramType}
         theme={settings.theme}
-        onSelectDiagramType={handleFlipDiagramType}
+        onSelectDiagramType={type => setSelectedCategory(type)}
         onCreateNewPageOfType={(type, name) => {
           handleCreatePage(name, type);
           setSelectedCategory(type);
         }}
-        onFilterToolbox={handleFlipDiagramType}
+        onFilterToolbox={type => setSelectedCategory(type)}
       />
 
       <GitHubPublishModal

@@ -72,7 +72,7 @@ app.use((req, res, next) => {
 });
 
 // Server-side physical disk storage configurations
-const STORAGE_DIR = path.join(__dirname, 'storage_data');
+const FALLBACK_STORAGE_DIR = path.join(__dirname, 'storage_data');
 const CONFIG_FILE = path.join(__dirname, '.storage_root.txt');
 const DEFAULT_CONFIGURED_ROOT = 'c:/omnimind';
 
@@ -99,6 +99,20 @@ function setConfiguredRootDir(newPath: string): string {
   }
 }
 
+// When running on Windows (e.g. C:\GIT\mind_suite), save DIRECTLY to C:\omnimind!
+// When running in a Linux/cloud container, fallback to local storage_data directory
+function getPhysicalStorageDir(): string {
+  const configured = getConfiguredRootDir();
+  if (process.platform === 'win32') {
+    return path.normalize(configured);
+  }
+  // If configured is a Windows drive letter on non-Windows host:
+  if (/^[a-zA-Z]:/i.test(configured)) {
+    return FALLBACK_STORAGE_DIR;
+  }
+  return configured;
+}
+
 function sanitizeName(name: string): string {
   return (name || '').replace(/[^a-zA-Z0-9._-]/g, '_');
 }
@@ -114,9 +128,10 @@ function toWindowsPath(base: string, workspace: string, filename: string): strin
 
 // Ensure storage directories and default workspace with data/root.json exist on disk
 async function initStorageOnDisk() {
+  const storageDir = getPhysicalStorageDir();
   try {
-    await fsp.mkdir(STORAGE_DIR, { recursive: true });
-    const ws1Dir = path.join(STORAGE_DIR, 'workspace1');
+    await fsp.mkdir(storageDir, { recursive: true });
+    const ws1Dir = path.join(storageDir, 'workspace1');
     const ws1DataDir = path.join(ws1Dir, 'data');
     await fsp.mkdir(ws1DataDir, { recursive: true });
 
@@ -127,17 +142,17 @@ async function initStorageOnDisk() {
     if (!fs.existsSync(rootFileInData)) {
       if (fs.existsSync(rootFileInWs)) {
         await fsp.copyFile(rootFileInWs, rootFileInData);
-        console.log('[Storage] Moved workspace1/root.json -> workspace1/data/root.json on server disk');
+        logDebug('info', 'STORAGE', `Moved workspace1/root.json -> workspace1/data/root.json at ${storageDir}`);
       } else if (fs.existsSync(legacyDiagram1)) {
         await fsp.copyFile(legacyDiagram1, rootFileInData);
-        console.log('[Storage] Migrated workspace1/diagram1.json -> workspace1/data/root.json on server disk');
+        logDebug('info', 'STORAGE', `Migrated legacy diagram1.json -> data/root.json at ${storageDir}`);
       } else {
         await fsp.writeFile(rootFileInData, JSON.stringify(initialDiagramDocument, null, 2), 'utf-8');
-        console.log('[Storage] Initialized workspace1/data/root.json on server disk');
+        logDebug('success', 'STORAGE', `Initialized workspace1/data/root.json at ${storageDir}`);
       }
     }
-  } catch (err) {
-    console.error('[Storage] Error initializing disk storage:', err);
+  } catch (err: any) {
+    logDebug('error', 'STORAGE', `Error initializing disk storage at ${storageDir}: ${err.message}`, err.stack);
   }
 }
 
@@ -502,18 +517,19 @@ app.get('/api/storage/config', (req: Request, res: Response) => {
   const configuredRootDir = getConfiguredRootDir();
   res.json({
     configuredRootDir,
-    serverDataDir: STORAGE_DIR,
+    serverDataDir: getPhysicalStorageDir(),
     defaultEntrypoint: 'root.json',
   });
 });
 
 // 0. Server Debug Logs Endpoint for In-App and Diagnostics View
 app.get('/api/debug/logs', (req: Request, res: Response) => {
+  const storageDir = getPhysicalStorageDir();
   res.json({
     total: serverDebugLogs.length,
     platform: process.platform,
     nodeVersion: process.version,
-    serverDataDir: STORAGE_DIR,
+    serverDataDir: storageDir,
     configuredRootDir: getConfiguredRootDir(),
     logs: serverDebugLogs,
   });
@@ -539,13 +555,15 @@ app.post('/api/storage/config', (req: Request, res: Response) => {
 app.get('/api/workspaces', async (req: Request, res: Response) => {
   try {
     await initStorageOnDisk();
-    const entries = await fsp.readdir(STORAGE_DIR, { withFileTypes: true });
+    const storageDir = getPhysicalStorageDir();
+    await fsp.mkdir(storageDir, { recursive: true });
+    const entries = await fsp.readdir(storageDir, { withFileTypes: true });
     const workspaceFolders = entries.filter(e => e.isDirectory());
 
     const result = await Promise.all(
       workspaceFolders.map(async folder => {
         const wsId = folder.name;
-        const wsPath = path.join(STORAGE_DIR, wsId);
+        const wsPath = path.join(storageDir, wsId);
         const dataPath = path.join(wsPath, 'data');
         await fsp.mkdir(dataPath, { recursive: true });
 
@@ -594,7 +612,7 @@ app.get('/api/workspaces', async (req: Request, res: Response) => {
       })
     );
 
-    logDebug('info', 'STORAGE', `Listed ${result.length} workspaces from server disk (${STORAGE_DIR})`);
+    logDebug('info', 'STORAGE', `Listed ${result.length} workspaces from disk (${storageDir})`);
     res.json(result);
   } catch (err: any) {
     logDebug('error', 'STORAGE', `Failed to list workspaces on disk: ${err.message}`, err.stack);
@@ -607,14 +625,15 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
   try {
     const rawName = req.body.name || `workspace_${Date.now()}`;
     const safeId = sanitizeName(rawName.trim().toLowerCase()) || `workspace_${Date.now()}`;
-    const wsDir = path.join(STORAGE_DIR, safeId);
+    const storageDir = getPhysicalStorageDir();
+    const wsDir = path.join(storageDir, safeId);
     const dataDir = path.join(wsDir, 'data');
     await fsp.mkdir(dataDir, { recursive: true });
 
     const rootPath = path.join(dataDir, 'root.json');
     const winPath = toWindowsPath(getConfiguredRootDir(), safeId, 'root.json');
 
-    logDebug('info', 'STORAGE WORKSPACE', `Creating workspace "${safeId}" (Target Windows: ${winPath}, Server: ${rootPath})`);
+    logDebug('info', 'STORAGE WORKSPACE', `Creating workspace "${safeId}" at ${dataDir}`);
 
     // Create data/root.json starting point with requested diagramType template
     if (!fs.existsSync(rootPath)) {
@@ -646,7 +665,8 @@ app.post('/api/workspaces', async (req: Request, res: Response) => {
 app.delete('/api/workspaces/:workspaceId', async (req: Request, res: Response) => {
   try {
     const safeWs = sanitizeName(req.params.workspaceId);
-    const wsDir = path.join(STORAGE_DIR, safeWs);
+    const storageDir = getPhysicalStorageDir();
+    const wsDir = path.join(storageDir, safeWs);
 
     logDebug('warn', 'STORAGE WORKSPACE', `Deleting workspace directory: "${safeWs}" at ${wsDir}`);
 
@@ -675,14 +695,15 @@ app.get('/api/workspaces/:workspaceId/files/:filename', async (req: Request, res
     let safeFile = sanitizeName(req.params.filename);
     if (!safeFile.endsWith('.json')) safeFile += '.json';
 
-    let filePath = path.join(STORAGE_DIR, safeWs, 'data', safeFile);
+    const storageDir = getPhysicalStorageDir();
+    let filePath = path.join(storageDir, safeWs, 'data', safeFile);
     const winPath = toWindowsPath(getConfiguredRootDir(), safeWs, safeFile);
 
-    logDebug('info', 'STORAGE READ', `Request to read diagram file "${safeFile}" from workspace "${safeWs}"`);
+    logDebug('info', 'STORAGE READ', `Request to read diagram file "${safeFile}" from workspace "${safeWs}" (path: ${filePath})`);
 
     if (!fs.existsSync(filePath)) {
       // Check legacy path without data/
-      const legacyPath = path.join(STORAGE_DIR, safeWs, safeFile);
+      const legacyPath = path.join(storageDir, safeWs, safeFile);
       if (fs.existsSync(legacyPath)) {
         filePath = legacyPath;
       } else {
@@ -721,6 +742,7 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
 
     const configuredRoot = getConfiguredRootDir();
     const winPath = toWindowsPath(configuredRoot, safeWs, safeFile);
+    const storageDir = getPhysicalStorageDir();
 
     logDebug('info', 'STORAGE SAVE', `>>> Incoming SAVE for workspace="${safeWs}", file="${safeFile}"`);
     logDebug('info', 'STORAGE SAVE', `Target Windows Path: "${winPath}"`);
@@ -750,7 +772,7 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
       `Payload stats: Name="${req.body.name || safeFile}", Pages=${pagesCount}, Nodes=${totalNodes}, Edges=${totalEdges}`
     );
 
-    const dataDir = path.join(STORAGE_DIR, safeWs, 'data');
+    const dataDir = path.join(storageDir, safeWs, 'data');
     await fsp.mkdir(dataDir, { recursive: true });
 
     const filePath = path.join(dataDir, safeFile);
@@ -768,7 +790,7 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
     logDebug(
       'success',
       'STORAGE SAVE',
-      `Written ${bytes} bytes to ${filePath} (${duration}ms). Windows Path: ${winPath}`
+      `Written ${bytes} bytes directly to ${filePath} (${duration}ms). Windows Path: ${winPath}`
     );
 
     res.json({
@@ -782,7 +804,7 @@ app.post('/api/workspaces/:workspaceId/files/:filename', async (req: Request, re
       timestamp: new Date().toISOString(),
       durationMs: duration,
       stats: { pages: pagesCount, nodes: totalNodes, edges: totalEdges },
-      message: `Successfully written ${safeFile} to server disk at ${filePath}`,
+      message: `Successfully written ${safeFile} to disk at ${filePath}`,
     });
   } catch (err: any) {
     logDebug('error', 'STORAGE SAVE', `FAILED to save diagram: ${err.message}`, err.stack);
@@ -808,7 +830,8 @@ app.delete('/api/workspaces/:workspaceId/files/:filename', async (req: Request, 
       });
     }
 
-    const filePath = path.join(STORAGE_DIR, safeWs, 'data', safeFile);
+    const storageDir = getPhysicalStorageDir();
+    const filePath = path.join(storageDir, safeWs, 'data', safeFile);
     logDebug('warn', 'STORAGE DELETE', `Deleting diagram file "${safeFile}" from workspace "${safeWs}" (path: ${filePath})`);
 
     if (fs.existsSync(filePath)) {

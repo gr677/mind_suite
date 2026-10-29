@@ -29,6 +29,7 @@ import {
   Settings,
   Palette,
   ArrowLeft,
+  Lock,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
 
@@ -177,18 +178,20 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </kbd>
         </button>
 
-        {/* Current Diagram Type Badge */}
+        {/* Current Diagram Type Badge (Locked - Set on creation) */}
         <div
-          onClick={onOpenGallery}
-          className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] font-mono cursor-pointer transition-colors shrink-0 ${
+          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono shrink-0 select-none ${
             isDark
-              ? 'bg-slate-900 border-slate-800 hover:border-slate-700 text-blue-300'
-              : 'bg-slate-100 border-slate-200 hover:border-slate-300 text-blue-700'
+              ? 'bg-slate-900/90 border-slate-800 text-sky-300'
+              : 'bg-slate-100 border-slate-200 text-sky-700'
           }`}
-          title="Click to view diagram standard details or switch diagram type"
+          title={`Diagram format: ${currentPage.diagramType.toUpperCase()} (Locked at creation). You can drag & drop objects from any diagram type using the Shape Library.`}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-          <span className="uppercase font-semibold">{currentPage.diagramType}</span>
+          <Lock className="w-3 h-3 text-amber-400" />
+          <span className="uppercase font-bold">{currentPage.diagramType}</span>
+          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+            Locked
+          </span>
         </div>
 
         {/* Dynamic Breadcrumbs */}

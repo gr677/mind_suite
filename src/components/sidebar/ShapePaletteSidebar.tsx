@@ -30,6 +30,7 @@ import {
   GitBranch,
   BookOpen,
   Archive,
+  Lock,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
 import { WorkspaceDropdown } from './WorkspaceDropdown';
@@ -140,7 +141,27 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
           <WorkspaceDropdown onLoadDiagram={onLoadDiagram} theme={theme} />
         )}
 
-        <div className="flex items-center justify-between pt-1">
+        {/* Locked Active Diagram Type Banner */}
+        <div
+          className={`px-2 py-1.5 rounded-lg border flex items-center justify-between text-[11px] ${
+            themeDef.isDark
+              ? 'bg-slate-950/70 border-slate-800 text-slate-300'
+              : 'bg-slate-100 border-slate-200 text-slate-700'
+          }`}
+          title="The active diagram format was set when this diagram was created and is locked to maintain model integrity. You can add elements from any other diagram type below."
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+            <span className="truncate">
+              Format: <strong className="text-blue-400 font-mono uppercase">{currentDiagramType}</strong>
+            </span>
+          </div>
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+            Locked
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between pt-0.5">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400">
               <Grid className="w-4 h-4" />
@@ -164,7 +185,7 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
         >
           <div className="flex items-center gap-1.5">
             <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-            <span>Diagram Types (18+)</span>
+            <span>Diagram Standards (18+)</span>
           </div>
           <span className="px-1.5 py-0.2 bg-blue-500/30 rounded text-[9px] font-mono">Gallery</span>
         </button>
@@ -187,9 +208,12 @@ export const ShapePaletteSidebar: React.FC<ShapePaletteSidebarProps> = ({
 
         {/* Diagram Category Dropdown */}
         <div>
-          <label className={`text-[10px] uppercase font-mono block mb-1 ${themeDef.textMutedClass}`}>
-            Filter by Diagram Type
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className={`text-[10px] uppercase font-mono ${themeDef.textMutedClass}`}>
+              Filter Shapes
+            </label>
+            <span className="text-[9px] text-blue-400 font-medium">Mix any type</span>
+          </div>
           <select
             value={selectedCategory}
             onChange={e => onSelectCategory(e.target.value)}
