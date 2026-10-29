@@ -61,10 +61,13 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   }, []);
 
   useEffect(() => {
-    if (activeWs) {
-      setCustomBasePath(activeWs.basePath);
+    if (isOpen) {
+      workspaceService.fetchServerWorkspaces().then(() => {
+        setStore({ ...workspaceService.getStore() });
+        setActiveWs({ ...workspaceService.getActiveWorkspace() });
+      });
     }
-  }, [activeWs]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -83,10 +86,10 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
     onLoadDiagram(diag.document);
   };
 
-  const handleCreateWorkspace = (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWsName.trim()) return;
-    const ws = workspaceService.createWorkspace(newWsName.trim(), newWsDiagramType);
+    const ws = await workspaceService.createWorkspace(newWsName.trim(), newWsDiagramType);
     setActiveWs(ws);
     setNewWsName('');
     setIsCreatingWs(false);
@@ -397,11 +400,11 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
 
                     {Object.keys(store.workspaces).length > 1 && (
                       <button
-                        onClick={e => {
+                        onClick={async e => {
                           e.stopPropagation();
-                          if (confirm(`Delete workspace "${ws.name}" and all its diagrams?`)) {
-                            workspaceService.deleteWorkspace(ws.id);
-                          }
+                          await workspaceService.deleteWorkspace(ws.id);
+                          setStore({ ...workspaceService.getStore() });
+                          setActiveWs({ ...workspaceService.getActiveWorkspace() });
                         }}
                         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-rose-500/20 text-rose-500 rounded transition-all cursor-pointer"
                         title="Delete workspace"

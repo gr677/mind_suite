@@ -119,6 +119,63 @@ class WorkspaceService {
     };
   }
 
+  public syncWithServerWorkspaces(serverWorkspaces: any[]): void {
+    if (!Array.isArray(serverWorkspaces)) return;
+
+    const updatedWorkspaces: Record<string, Workspace> = {};
+
+    for (const sw of serverWorkspaces) {
+      const existing = this.store.workspaces[sw.id];
+      if (existing) {
+        updatedWorkspaces[sw.id] = {
+          ...existing,
+          name: sw.name || existing.name || sw.id,
+          basePath: sw.basePath || existing.basePath || DEFAULT_BASE_PATH,
+        };
+      } else {
+        updatedWorkspaces[sw.id] = {
+          id: sw.id,
+          name: sw.name || sw.id,
+          basePath: sw.basePath || DEFAULT_BASE_PATH,
+          activeDiagramFilename: 'root.json',
+          diagrams: {
+            'root.json': {
+              filename: 'root.json',
+              name: `${sw.name || sw.id} Root Architecture`,
+              lastModified: new Date().toISOString(),
+              document: initialDiagramDocument,
+            },
+          },
+        };
+      }
+    }
+
+    // Only update if server returned valid workspaces (at least 1)
+    if (Object.keys(updatedWorkspaces).length > 0) {
+      this.store.workspaces = updatedWorkspaces;
+      if (!this.store.workspaces[this.store.activeWorkspaceId]) {
+        this.store.activeWorkspaceId = Object.keys(updatedWorkspaces)[0];
+      }
+      this.saveStore();
+    }
+  }
+
+  public async fetchServerWorkspaces(): Promise<any[]> {
+    try {
+      const resp = await fetch('/api/workspaces');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data)) {
+          this.syncWithServerWorkspaces(data);
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn('[WorkspaceService] Failed to fetch server workspaces:', err);
+    }
+    return [];
+  }
+
   private async initFromServer(): Promise<void> {
     try {
       // 1. Fetch configured root directory from server
@@ -135,34 +192,8 @@ class WorkspaceService {
         }
       }
 
-      // 2. Fetch server workspaces
-      const wsResp = await fetch('/api/workspaces');
-      if (wsResp.ok) {
-        const serverWorkspaces: any[] = await wsResp.json();
-        let changed = false;
-        for (const sw of serverWorkspaces) {
-          if (!this.store.workspaces[sw.id]) {
-            this.store.workspaces[sw.id] = {
-              id: sw.id,
-              name: sw.name || sw.id,
-              basePath: sw.basePath || DEFAULT_BASE_PATH,
-              activeDiagramFilename: 'root.json',
-              diagrams: {
-                'root.json': {
-                  filename: 'root.json',
-                  name: `${sw.name || sw.id} Root Architecture`,
-                  lastModified: new Date().toISOString(),
-                  document: initialDiagramDocument,
-                },
-              },
-            };
-            changed = true;
-          }
-        }
-        if (changed) {
-          this.saveStore();
-        }
-      }
+      // 2. Fetch server workspaces and strictly sync with physical server disk
+      await this.fetchServerWorkspaces();
     } catch (err) {
       console.warn('[WorkspaceService] Note: Running without server sync or server not ready:', err);
     }
@@ -374,7 +405,7 @@ class WorkspaceService {
     return this.getActiveWorkspace();
   }
 
-  public createWorkspace(name: string, diagramType: DiagramType = 'generic', basePath?: string): Workspace {
+  public async createWorkspace(name: string, diagramType: DiagramType = 'generic', basePath?: string): Promise<Workspace> {
     const safeId = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_') || `workspace_${Date.now()}`;
     const id = this.store.workspaces[safeId] ? `${safeId}_${Date.now().toString().slice(-4)}` : safeId;
     const cleanBasePath = (basePath || this.getActiveWorkspace()?.basePath || DEFAULT_BASE_PATH).trim();
@@ -425,13 +456,16 @@ class WorkspaceService {
     this.saveStore();
 
     // Also register on server disk in <workspace>/data/root.json
-    fetch('/api/workspaces', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), id, diagramType, templateDoc: starterDoc }),
-    }).catch(err => {
+    try {
+      await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), id, diagramType, templateDoc: starterDoc }),
+      });
+      await this.fetchServerWorkspaces();
+    } catch (err) {
       console.warn('[WorkspaceService] Note: Failed to create workspace on server disk:', err);
-    });
+    }
 
     return newWorkspace;
   }
@@ -480,7 +514,7 @@ class WorkspaceService {
     return trimmed;
   }
 
-  public deleteWorkspace(id: string): boolean {
+  public async deleteWorkspace(id: string): Promise<boolean> {
     const keys = Object.keys(this.store.workspaces);
     if (keys.length <= 1) {
       console.warn('Cannot delete the only remaining workspace.');
@@ -493,11 +527,14 @@ class WorkspaceService {
     this.saveStore();
 
     // Also remove entire workspace folder from server disk
-    fetch(`/api/workspaces/${id}`, {
-      method: 'DELETE',
-    }).catch(err => {
+    try {
+      await fetch(`/api/workspaces/${id}`, {
+        method: 'DELETE',
+      });
+      await this.fetchServerWorkspaces();
+    } catch (err) {
       console.warn('[WorkspaceService] Failed to delete workspace directory on server:', err);
-    });
+    }
 
     return true;
   }

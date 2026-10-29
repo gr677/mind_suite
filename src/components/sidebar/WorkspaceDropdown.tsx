@@ -83,43 +83,16 @@ export const WorkspaceDropdown: React.FC<WorkspaceDropdownProps> = ({
     return unsub;
   }, []);
 
-  // Fetch updated workspace directory list from server when dropdown opens
+  // Fetch updated workspace directory list from server on mount and when dropdown opens
   useEffect(() => {
-    if (isOpen) {
+    const syncWorkspaces = async () => {
       setConfirmDeleteWsId(null);
       setDeleteNotice(null);
-      fetch('/api/workspaces')
-        .then(res => res.json())
-        .then((serverWorkspaces: any[]) => {
-          if (Array.isArray(serverWorkspaces)) {
-            let changed = false;
-            const currentStore = workspaceService.getStore();
-            serverWorkspaces.forEach(sw => {
-              if (!currentStore.workspaces[sw.id]) {
-                currentStore.workspaces[sw.id] = {
-                  id: sw.id,
-                  name: sw.name || sw.id,
-                  basePath: sw.basePath || 'c:/omnimind',
-                  activeDiagramFilename: 'root.json',
-                  diagrams: {
-                    'root.json': {
-                      filename: 'root.json',
-                      name: `${sw.name || sw.id} Root Architecture`,
-                      lastModified: new Date().toISOString(),
-                      document: initialDiagramDocument,
-                    },
-                  },
-                };
-                changed = true;
-              }
-            });
-            if (changed) {
-              setStore({ ...currentStore });
-            }
-          }
-        })
-        .catch(() => {});
-    }
+      await workspaceService.fetchServerWorkspaces();
+      setStore({ ...workspaceService.getStore() });
+      setActiveWs({ ...workspaceService.getActiveWorkspace() });
+    };
+    syncWorkspaces();
   }, [isOpen]);
 
   // Close dropdown when clicking outside
@@ -168,25 +141,27 @@ export const WorkspaceDropdown: React.FC<WorkspaceDropdownProps> = ({
     setConfirmDeleteWsId(wsId);
   };
 
-  const handleExecuteDelete = (e: React.MouseEvent, wsId: string) => {
+  const handleExecuteDelete = async (e: React.MouseEvent, wsId: string) => {
     e.stopPropagation();
-    workspaceService.deleteWorkspace(wsId);
+    await workspaceService.deleteWorkspace(wsId);
     setConfirmDeleteWsId(null);
     const newActive = workspaceService.getActiveWorkspace();
     setActiveWs(newActive);
     const diag = workspaceService.getActiveDiagram();
     onLoadDiagram(diag.document);
+    setStore({ ...workspaceService.getStore() });
   };
 
-  const handleCreateWorkspace = (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWsName.trim()) return;
 
     // Create workspace with data\root.json of selected diagram type
-    const createdWs = workspaceService.createWorkspace(newWsName.trim(), selectedDiagramType);
+    const createdWs = await workspaceService.createWorkspace(newWsName.trim(), selectedDiagramType);
     setActiveWs(createdWs);
     const rootDoc = createdWs.diagrams['root.json']?.document || workspaceService.getActiveDiagram().document;
     onLoadDiagram(rootDoc);
+    setStore({ ...workspaceService.getStore() });
 
     // Reset state & close
     setNewWsName('');
@@ -195,17 +170,20 @@ export const WorkspaceDropdown: React.FC<WorkspaceDropdownProps> = ({
   };
 
   const configuredRootDisplay = (activeWs.basePath || 'c:/omnimind').replace(/\/+$/, '');
-  const windowsRootDisplay = configuredRootDisplay.replace(/\//g, '\\');
+  let windowsRootDisplay = configuredRootDisplay.replace(/\//g, '\\');
+  if (/^[a-z]:\\/i.test(windowsRootDisplay)) {
+    windowsRootDisplay = windowsRootDisplay.charAt(0).toUpperCase() + windowsRootDisplay.slice(1);
+  }
 
   return (
     <div ref={dropdownRef} className="relative z-30 mb-2">
       {/* Label above dropdown */}
-      <div className="flex items-center justify-between px-1 mb-1 text-[10px] uppercase font-mono font-bold tracking-wider">
-        <span className={`flex items-center gap-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+      <div className="flex items-center justify-between px-1 mb-1 text-[10px] font-mono font-bold tracking-wider">
+        <span className={`flex items-center gap-1.5 uppercase ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
           <HardDrive className="w-3 h-3 text-amber-500" />
           <span>Workspace</span>
         </span>
-        <span className="text-[9px] text-amber-400/90 font-mono truncate max-w-[130px]">
+        <span className="text-[9px] text-amber-400/90 font-mono truncate max-w-[130px] normal-case font-medium">
           {windowsRootDisplay}
         </span>
       </div>
@@ -259,8 +237,9 @@ export const WorkspaceDropdown: React.FC<WorkspaceDropdownProps> = ({
               isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
             }`}
           >
-            <div className="text-[10px] font-mono uppercase tracking-wider font-semibold">
-              Directories in {windowsRootDisplay}
+            <div className="text-[10px] font-mono tracking-wider font-semibold">
+              <span className="uppercase text-slate-400">Directories in</span>{' '}
+              <span className="text-amber-400 font-bold normal-case font-mono">{windowsRootDisplay}</span>
             </div>
             <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-amber-500/20 text-amber-400 border border-amber-500/30">
               {Object.keys(store.workspaces).length} Workspaces

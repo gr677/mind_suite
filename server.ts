@@ -99,12 +99,20 @@ function setConfiguredRootDir(newPath: string): string {
   }
 }
 
+function normalizeToWindowsPath(inputPath: string): string {
+  let p = (inputPath || DEFAULT_CONFIGURED_ROOT).trim().replace(/\/+/g, '\\').replace(/\\+$/, '');
+  if (/^[a-z]:\\/i.test(p)) {
+    p = p.charAt(0).toUpperCase() + p.slice(1);
+  }
+  return p;
+}
+
 // When running on Windows (e.g. C:\GIT\mind_suite), save DIRECTLY to C:\omnimind!
 // When running in a Linux/cloud container, fallback to local storage_data directory
 function getPhysicalStorageDir(): string {
   const configured = getConfiguredRootDir();
   if (process.platform === 'win32') {
-    return path.normalize(configured);
+    return normalizeToWindowsPath(configured);
   }
   // If configured is a Windows drive letter on non-Windows host:
   if (/^[a-zA-Z]:/i.test(configured)) {
@@ -118,12 +126,8 @@ function sanitizeName(name: string): string {
 }
 
 function toWindowsPath(base: string, workspace: string, filename: string): string {
-  const normBase = (base || DEFAULT_CONFIGURED_ROOT).replace(/\/+/g, '\\').replace(/\\+$/, '');
-  let win = `${normBase}\\${workspace}\\data\\${filename}`;
-  if (/^[a-z]:\\/i.test(win)) {
-    win = win.charAt(0).toUpperCase() + win.slice(1);
-  }
-  return win;
+  const normBase = normalizeToWindowsPath(base || DEFAULT_CONFIGURED_ROOT);
+  return `${normBase}\\${workspace}\\data\\${filename}`;
 }
 
 // Ensure storage directories and default workspace with data/root.json exist on disk
@@ -131,24 +135,28 @@ async function initStorageOnDisk() {
   const storageDir = getPhysicalStorageDir();
   try {
     await fsp.mkdir(storageDir, { recursive: true });
-    const ws1Dir = path.join(storageDir, 'workspace1');
-    const ws1DataDir = path.join(ws1Dir, 'data');
-    await fsp.mkdir(ws1DataDir, { recursive: true });
+    const entries = await fsp.readdir(storageDir, { withFileTypes: true });
+    const existingDirs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('$'));
 
-    const rootFileInData = path.join(ws1DataDir, 'root.json');
-    const rootFileInWs = path.join(ws1Dir, 'root.json');
-    const legacyDiagram1 = path.join(ws1Dir, 'diagram1.json');
-
-    if (!fs.existsSync(rootFileInData)) {
-      if (fs.existsSync(rootFileInWs)) {
-        await fsp.copyFile(rootFileInWs, rootFileInData);
-        logDebug('info', 'STORAGE', `Moved workspace1/root.json -> workspace1/data/root.json at ${storageDir}`);
-      } else if (fs.existsSync(legacyDiagram1)) {
-        await fsp.copyFile(legacyDiagram1, rootFileInData);
-        logDebug('info', 'STORAGE', `Migrated legacy diagram1.json -> data/root.json at ${storageDir}`);
-      } else {
-        await fsp.writeFile(rootFileInData, JSON.stringify(initialDiagramDocument, null, 2), 'utf-8');
-        logDebug('success', 'STORAGE', `Initialized workspace1/data/root.json at ${storageDir}`);
+    // Only initialize default workspace1 if the storage root is completely empty
+    if (existingDirs.length === 0) {
+      const ws1Dir = path.join(storageDir, 'workspace1');
+      const ws1DataDir = path.join(ws1Dir, 'data');
+      await fsp.mkdir(ws1DataDir, { recursive: true });
+      const rootFileInData = path.join(ws1DataDir, 'root.json');
+      await fsp.writeFile(rootFileInData, JSON.stringify(initialDiagramDocument, null, 2), 'utf-8');
+      logDebug('success', 'STORAGE', `Initialized default workspace1/data/root.json in empty root: ${storageDir}`);
+    } else {
+      // Ensure existing workspaces have their data/ directory and root.json
+      for (const dir of existingDirs) {
+        const wsPath = path.join(storageDir, dir.name);
+        const dataPath = path.join(wsPath, 'data');
+        await fsp.mkdir(dataPath, { recursive: true });
+        const rootInParent = path.join(wsPath, 'root.json');
+        const rootInData = path.join(dataPath, 'root.json');
+        if (fs.existsSync(rootInParent) && !fs.existsSync(rootInData)) {
+          await fsp.copyFile(rootInParent, rootInData);
+        }
       }
     }
   } catch (err: any) {
@@ -558,7 +566,9 @@ app.get('/api/workspaces', async (req: Request, res: Response) => {
     const storageDir = getPhysicalStorageDir();
     await fsp.mkdir(storageDir, { recursive: true });
     const entries = await fsp.readdir(storageDir, { withFileTypes: true });
-    const workspaceFolders = entries.filter(e => e.isDirectory());
+    const workspaceFolders = entries.filter(
+      e => e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('$')
+    );
 
     const result = await Promise.all(
       workspaceFolders.map(async folder => {
@@ -605,7 +615,7 @@ app.get('/api/workspaces', async (req: Request, res: Response) => {
         return {
           id: wsId,
           name: wsId,
-          basePath: getConfiguredRootDir(),
+          basePath: normalizeToWindowsPath(getConfiguredRootDir()),
           defaultEntrypoint: 'root.json',
           files,
         };
