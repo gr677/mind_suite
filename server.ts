@@ -516,6 +516,34 @@ app.post('/api/github/push', async (req: Request, res: Response) => {
   }
 });
 
+// Pull from public GitHub repository (public repos allow unauthenticated pulls)
+app.post('/api/github/pull', async (req: Request, res: Response) => {
+  const { repoUrl = 'https://github.com/gr677/mind_suite.git' } = req.body;
+  try {
+    const { stdout, stderr } = await execAsync(`git pull "${repoUrl}" main --no-rebase || git pull "${repoUrl}" main`);
+    res.json({
+      success: true,
+      message: 'Successfully pulled latest changes from GitHub repository!',
+      output: stdout || stderr || 'Already up to date.',
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      error: err.message || 'Failed to pull from GitHub repository.',
+    });
+  }
+});
+
+// Download full repository archive as zip file
+app.get('/api/github/archive', async (req: Request, res: Response) => {
+  try {
+    const archivePath = '/tmp/mind_suite_codebase.zip';
+    await execAsync(`git archive --format=zip --prefix=mind_suite/ HEAD -o ${archivePath}`);
+    res.download(archivePath, 'mind_suite_full_project.zip');
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to create zip archive: ' + err.message });
+  }
+});
+
 // ==========================================
 // WORKSPACE & PHYSICAL DISK STORAGE API
 // ==========================================

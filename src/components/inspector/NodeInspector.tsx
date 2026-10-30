@@ -32,9 +32,17 @@ import {
   RotateCcw,
   Link2,
   Check,
+  Calendar,
+  Milestone,
+  UserCheck,
 } from 'lucide-react';
 import { THEMES } from '../../utils/themeConfig';
 import { getDefaultConnectorStyleForDiagram, CONNECTOR_STYLE_OPTIONS } from '../../utils/diagramConnectorConfig';
+import {
+  VIBRANT_COLOR_PALETTES,
+  PASTEL_COLOR_PALETTES,
+  ColorPaletteItem,
+} from '../../utils/colorUtils';
 
 interface NodeInspectorProps {
   selectedNode: DiagramNode | null;
@@ -74,6 +82,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const [newCommentText, setNewCommentText] = useState('');
   const [newStickyText, setNewStickyText] = useState('');
   const [stickyColor, setStickyColor] = useState<StickyNote['color']>('yellow');
+  const [paletteCategory, setPaletteCategory] = useState<'pastel' | 'vibrant'>('pastel');
 
   const themeDef = THEMES[theme] || THEMES.dark;
 
@@ -668,22 +677,41 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </button>
             </div>
 
-            {/* Quick Palettes */}
-            <div>
-              <span className="text-[9px] font-mono text-slate-500 block mb-1">Preset Themes:</span>
-              <div className="grid grid-cols-4 gap-1.5">
-                {[
-                  { label: 'Purple / Mind', fill: 'rgba(109, 40, 217, 0.85)', stroke: '#c084fc', text: '#ffffff' },
-                  { label: 'Azure Blue', fill: 'rgba(30, 58, 138, 0.9)', stroke: '#3b82f6', text: '#ffffff' },
-                  { label: 'Emerald', fill: 'rgba(6, 78, 59, 0.9)', stroke: '#10b981', text: '#ffffff' },
-                  { label: 'Amber Gold', fill: 'rgba(120, 53, 15, 0.9)', stroke: '#f59e0b', text: '#ffffff' },
-                  { label: 'Rose Pink', fill: 'rgba(136, 19, 55, 0.9)', stroke: '#f43f5e', text: '#ffffff' },
-                  { label: 'Cyan Ocean', fill: 'rgba(14, 116, 144, 0.9)', stroke: '#06b6d4', text: '#ffffff' },
-                  { label: 'Midnight Slate', fill: 'rgba(15, 23, 42, 0.95)', stroke: '#0284c7', text: '#ffffff' },
-                  { label: 'Light Clean', fill: '#f8fafc', stroke: '#94a3b8', text: '#0f172a' },
-                ].map(p => (
+            {/* Extended Color Palettes (Pastel & Vibrant Collections - 24 Options) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono text-slate-400 font-semibold">Color Palettes</span>
+                <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[9px] font-mono">
                   <button
-                    key={p.label}
+                    type="button"
+                    onClick={() => setPaletteCategory('pastel')}
+                    className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                      paletteCategory === 'pastel'
+                        ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Pastels (12)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaletteCategory('vibrant')}
+                    className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
+                      paletteCategory === 'vibrant'
+                        ? 'bg-blue-500/20 text-blue-300 font-bold border border-blue-500/40'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Vibrant (12)
+                  </button>
+                </div>
+              </div>
+
+              {/* Swatch Grid */}
+              <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto pr-0.5">
+                {(paletteCategory === 'pastel' ? PASTEL_COLOR_PALETTES : VIBRANT_COLOR_PALETTES).map(p => (
+                  <button
+                    key={p.id}
                     type="button"
                     disabled={isReadOnly}
                     onClick={() => {
@@ -693,21 +721,68 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                           ...selectedNode.style,
                           fill: p.fill,
                           stroke: p.stroke,
-                          textColor: p.text,
+                          textColor: p.textColor,
                         },
                       });
                     }}
-                    className="p-1 rounded-md border border-slate-700/80 hover:scale-105 transition-transform flex items-center gap-1.5 text-left cursor-pointer"
+                    className="p-1 rounded-md border border-slate-700/80 hover:scale-105 transition-all flex items-center gap-1 text-left cursor-pointer shadow-xs group"
                     style={{ backgroundColor: p.fill }}
-                    title={p.label}
+                    title={`${p.name} (Fill: ${p.fill}, Border: ${p.stroke})`}
                   >
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.stroke }} />
-                    <span className="text-[9px] font-medium truncate" style={{ color: p.text }}>
-                      {p.label.split(' ')[0]}
+                    <div
+                      className="w-2.5 h-2.5 rounded-full shrink-0 border border-black/20"
+                      style={{ backgroundColor: p.stroke }}
+                    />
+                    <span
+                      className="text-[9px] font-semibold truncate leading-none"
+                      style={{ color: p.textColor }}
+                    >
+                      {p.name.replace('Pastel ', '')}
                     </span>
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Gradual Darkening Gradient Toggle Option */}
+            <div className="pt-1">
+              <button
+                type="button"
+                disabled={isReadOnly}
+                onClick={() => {
+                  onUpdateNode({
+                    ...selectedNode,
+                    style: {
+                      ...selectedNode.style,
+                      gradient: !selectedNode.style?.gradient,
+                    },
+                  });
+                }}
+                className={`w-full p-2 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
+                  selectedNode.style?.gradient
+                    ? 'border-indigo-500 bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-500/50'
+                    : 'border-slate-800 bg-slate-950 hover:border-slate-700 text-slate-300'
+                }`}
+                title="When enabled, the node background gradually darkens from top to bottom"
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-5 h-5 rounded border border-white/20 shadow-sm shrink-0"
+                    style={{
+                      background: 'linear-gradient(180deg, #38bdf8 0%, #0369a1 100%)',
+                    }}
+                  />
+                  <div>
+                    <div className="font-semibold text-xs text-slate-100">Gradual Darkening Fill</div>
+                    <div className="text-[10px] text-slate-400">Darkens smoothly toward the bottom of the node</div>
+                  </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  selectedNode.style?.gradient ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {selectedNode.style?.gradient ? 'ON' : 'OFF'}
+                </span>
+              </button>
             </div>
 
             {/* Custom Color Pickers */}
@@ -1488,6 +1563,234 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   onChange={e => onUpdateNode({ ...selectedNode, data: { ...selectedNode.data, statute: e.target.value } })}
                   className="w-full bg-slate-950 border border-slate-800 rounded p-1 text-slate-100 font-mono text-xs"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Specialized Gantt Task / Milestone Attributes Editor */}
+          {selectedNode.type === 'gantt-task' && (
+            <div className="pt-2 border-t border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] uppercase font-mono text-emerald-400 font-bold flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  Gantt Task &amp; Progress
+                </label>
+                <span className="text-[9px] font-mono text-emerald-300 font-semibold">
+                  {selectedNode.data?.progress ?? 0}% done
+                </span>
+              </div>
+
+              {/* Progress Slider & Input */}
+              <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-200">Progress So Far</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      disabled={isReadOnly}
+                      value={selectedNode.data?.progress ?? 0}
+                      onChange={e => {
+                        const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                        onUpdateNode({
+                          ...selectedNode,
+                          data: { ...selectedNode.data, progress: val },
+                        });
+                      }}
+                      className="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-emerald-400 font-mono font-bold text-xs text-right"
+                    />
+                    <span className="text-slate-400 font-mono text-xs">%</span>
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  disabled={isReadOnly}
+                  value={selectedNode.data?.progress ?? 0}
+                  onChange={e => {
+                    const val = parseInt(e.target.value, 10);
+                    onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, progress: val },
+                    });
+                  }}
+                  className="w-full accent-emerald-500 cursor-pointer"
+                />
+                <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all"
+                    style={{ width: `${selectedNode.data?.progress ?? 0}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Dates & Duration Grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    disabled={isReadOnly}
+                    value={selectedNode.data?.startDate || ''}
+                    onChange={e => onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, startDate: e.target.value },
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">End Date</label>
+                  <input
+                    type="date"
+                    disabled={isReadOnly}
+                    value={selectedNode.data?.endDate || ''}
+                    onChange={e => onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, endDate: e.target.value },
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Duration & Assignee */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Duration (Days)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    disabled={isReadOnly}
+                    value={selectedNode.data?.duration ?? 5}
+                    onChange={e => onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, duration: parseInt(e.target.value) || 0 },
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Assignee</label>
+                  <input
+                    type="text"
+                    disabled={isReadOnly}
+                    value={selectedNode.data?.assignee || ''}
+                    placeholder="e.g. Alex Chen"
+                    onChange={e => onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, assignee: e.target.value },
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Status & Priority */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Task Status</label>
+                  <select
+                    disabled={isReadOnly}
+                    value={selectedNode.data?.status || 'in-progress'}
+                    onChange={e => onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, status: e.target.value },
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="not-started">Not Started</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed (100%)</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="on-hold">On Hold</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Priority</label>
+                  <select
+                    disabled={isReadOnly}
+                    value={selectedNode.data?.priority || 'medium'}
+                    onChange={e => onUpdateNode({
+                      ...selectedNode,
+                      data: { ...selectedNode.data, priority: e.target.value },
+                    })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Milestone Checkbox */}
+              <label className="flex items-center gap-2 p-2 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:border-slate-700 transition-colors">
+                <input
+                  type="checkbox"
+                  disabled={isReadOnly}
+                  checked={!!selectedNode.data?.isMilestone}
+                  onChange={e => onUpdateNode({
+                    ...selectedNode,
+                    data: { ...selectedNode.data, isMilestone: e.target.checked },
+                  })}
+                  className="rounded text-amber-500 focus:ring-0"
+                />
+                <Milestone className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-xs font-semibold text-amber-300">Mark as Key Project Milestone</span>
+              </label>
+            </div>
+          )}
+
+          {/* Specialized UML Actor Editor */}
+          {(selectedNode.type === 'uml-actor' || selectedNode.type === 'actor') && (
+            <div className="pt-2 border-t border-slate-800 space-y-2.5">
+              <label className="text-[10px] uppercase font-mono text-cyan-400 font-bold block">
+                UML Actor Notation
+              </label>
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-1">Actor Stereotype / Role</label>
+                <input
+                  type="text"
+                  disabled={isReadOnly}
+                  value={selectedNode.data?.actorType || ''}
+                  placeholder="e.g. Primary User, Customer, External System"
+                  onChange={e => onUpdateNode({
+                    ...selectedNode,
+                    data: { ...selectedNode.data, actorType: e.target.value },
+                  })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Specialized Flowchart Data Editor */}
+          {selectedNode.type === 'flow-data' && (
+            <div className="pt-2 border-t border-slate-800 space-y-2.5">
+              <label className="text-[10px] uppercase font-mono text-sky-400 font-bold block">
+                Flowchart Data (I/O) Notation
+              </label>
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-1">I/O Operation Type</label>
+                <select
+                  disabled={isReadOnly}
+                  value={selectedNode.data?.ioType || 'INPUT'}
+                  onChange={e => onUpdateNode({
+                    ...selectedNode,
+                    data: { ...selectedNode.data, ioType: e.target.value },
+                  })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-slate-100 font-mono text-xs"
+                >
+                  <option value="INPUT">Input (Read)</option>
+                  <option value="OUTPUT">Output (Write)</option>
+                  <option value="PAYLOAD">Payload / Message</option>
+                  <option value="STREAM">Event Stream</option>
+                </select>
               </div>
             </div>
           )}

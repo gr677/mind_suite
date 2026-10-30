@@ -24,6 +24,7 @@ import {
   AlertCircle,
   Loader2,
   Send,
+  RefreshCw,
 } from 'lucide-react';
 
 interface GitHubPublishModalProps {
@@ -46,9 +47,11 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({
   const [personalAccessToken, setPersonalAccessToken] = useState('');
   const [activeTab, setActiveTab] = useState<'direct' | 'cli' | 'markdown' | 'bundle'>('direct');
 
-  // Push state
+  // Push & Pull state
   const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [pushSuccess, setPushSuccess] = useState<string | null>(null);
+  const [pullSuccess, setPullSuccess] = useState<string | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
   const [gitStatus, setGitStatus] = useState<any>(null);
 
@@ -70,6 +73,36 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
+  const handlePullFromGitHub = async () => {
+    setIsPulling(true);
+    setPullSuccess(null);
+    setPushError(null);
+    try {
+      const response = await fetch('/api/github/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoUrl: repoUrl.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to pull from GitHub repository.');
+      }
+      setPullSuccess(data.message || 'Successfully synchronized with GitHub!');
+      fetch('/api/github/status')
+        .then(res => res.json())
+        .then(data => setGitStatus(data))
+        .catch(() => {});
+    } catch (err: any) {
+      setPushError(err.message || 'Error pulling from GitHub repository.');
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const handleDownloadZipArchive = () => {
+    window.location.href = '/api/github/archive';
+  };
+
   const handleDirectPush = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!personalAccessToken.trim()) {
@@ -80,6 +113,7 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({
     setIsPushing(true);
     setPushError(null);
     setPushSuccess(null);
+    setPullSuccess(null);
 
     try {
       const response = await fetch('/api/github/push', {
@@ -109,21 +143,27 @@ export const GitHubPublishModal: React.FC<GitHubPublishModalProps> = ({
     }
   };
 
-  const gitCliScript = `# 1. Ensure you are in the project root directory
-cd mind_suite
+  const gitCliScript = `# ========================================================
+# OPTION 1: Update your existing local copy at C:\\GIT\\mind_suite
+# ========================================================
+cd C:\\GIT\\mind_suite
 
-# 2. Add remote origin (if not already set)
-git remote add origin ${repoUrl} || git remote set-url origin ${repoUrl}
+# 1. Pull latest commits (stick man UML actors, gantt editing, pastel themes)
+git pull origin main
 
-# 3. Stage all source files, schemas, and configurations
+# 2. To push any local changes from your PC:
 git add .
+git commit -m "feat: updates from local workspace"
+git push origin main
 
-# 4. Commit latest architecture changes
-git commit -m "feat: complete Mind Suite enterprise diagram suite with 20 notation models"
-
-# 5. Push to GitHub main branch
-git branch -M main
-git push -u origin main`;
+# ========================================================
+# OPTION 2: If cloning for the first time
+# ========================================================
+cd C:\\GIT
+git clone ${repoUrl}
+cd mind_suite
+npm install
+npm run dev`;
 
   const generateMarkdownDoc = () => {
     return `# Mind Suite (${document.name})
@@ -301,29 +341,71 @@ npm run dev
         {/* Tab 1: Direct Push */}
         {activeTab === 'direct' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
-            {/* Status pill */}
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <div>
-                  <div className="font-semibold text-slate-200 text-xs">Local Repository Ready for Remote Push</div>
-                  <div className="text-[10px] text-slate-400 font-mono">
-                    Branch: {gitStatus?.branch || 'main'} | Remote: {repoUrl}
+            {/* Public Repository Status Card */}
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-100 text-xs">Public Repository Connected</span>
+                      <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded text-[9px] font-mono font-bold">
+                        PUBLIC &amp; REACHABLE
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      Branch: <span className="text-slate-200 font-semibold">{gitStatus?.branch || 'main'}</span> • Origin: <span className="text-sky-400">{repoUrl}</span>
+                    </div>
                   </div>
                 </div>
+                <a
+                  href="https://github.com/gr677/mind_suite"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-[11px] text-blue-400 hover:underline px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-lg hover:border-slate-700 transition-colors"
+                >
+                  <span>Open Repo</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
-              <a
-                href="https://github.com/gr677/mind_suite"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-[11px] text-blue-400 hover:underline"
-              >
-                <span>View on GitHub</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+
+              {/* Quick Actions (Pull & Download) */}
+              <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  disabled={isPulling}
+                  onClick={handlePullFromGitHub}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer transition-colors border border-slate-700"
+                  title="Pull commits from the public repository without needing credentials"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-sky-400 ${isPulling ? 'animate-spin' : ''}`} />
+                  <span>{isPulling ? 'Syncing with GitHub...' : 'Pull / Sync from GitHub'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadZipArchive}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer transition-colors border border-slate-700"
+                  title="Download an exact archive of the current codebase as a zip file"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Download Codebase (.zip)</span>
+                </button>
+              </div>
             </div>
 
-            {/* Success Message */}
+            {/* Pull Success Message */}
+            {pullSuccess && (
+              <div className="p-3.5 bg-sky-950/60 border border-sky-500/40 rounded-xl space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sky-300 text-xs">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Repository Synchronized!</span>
+                </div>
+                <p className="text-sky-200/90 text-[11px]">{pullSuccess}</p>
+              </div>
+            )}
+
+            {/* Push Success Message */}
             {pushSuccess && (
               <div className="p-4 bg-emerald-950/60 border border-emerald-500/40 rounded-xl space-y-1">
                 <div className="flex items-center gap-2 font-bold text-emerald-300 text-sm">
@@ -350,7 +432,7 @@ npm run dev
               <div className="p-3.5 bg-rose-950/60 border border-rose-500/40 rounded-xl text-rose-200 space-y-1">
                 <div className="flex items-center gap-2 font-bold text-rose-300">
                   <AlertCircle className="w-4 h-4" />
-                  <span>Push Failed</span>
+                  <span>Operation Failed</span>
                 </div>
                 <p className="text-[11px] font-mono leading-relaxed">{pushError}</p>
                 <p className="text-[10px] text-rose-300/80 pt-1">
@@ -398,7 +480,7 @@ npm run dev
                   className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500 placeholder:text-slate-600"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">
-                  Your token is used strictly to authenticate the git push command and is never permanently stored.
+                  Because the repository is public, reading/cloning requires no credentials, but GitHub security mandates a token to authenticate write/push actions.
                 </p>
               </div>
 
@@ -502,11 +584,18 @@ npm run dev
               </p>
               <div className="pt-2 flex flex-wrap gap-2">
                 <button
+                  onClick={handleDownloadZipArchive}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium cursor-pointer transition-colors shadow"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Entire Project ZIP (.zip)</span>
+                </button>
+                <button
                   onClick={handleDownloadFullJson}
                   className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium cursor-pointer transition-colors shadow"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Full Diagram JSON Bundle</span>
+                  <span>Download Diagram JSON Bundle</span>
                 </button>
                 <button
                   onClick={handleDownloadMarkdown}

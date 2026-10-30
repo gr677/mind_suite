@@ -92,6 +92,7 @@ export interface DiagramNode {
     fontSize?: number;
     rounded?: number;
     opacity?: number;
+    gradient?: boolean; // When true, background fill gradually darkens towards bottom
   };
   data: Record<string, any>; // Diagram-specific data (ERD fields, BPMN tasks, PERT numbers, etc.)
   documentation?: NodeDocumentation;

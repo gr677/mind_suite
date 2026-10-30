@@ -23,7 +23,10 @@ import {
   FolderOpen,
   Plus,
   ExternalLink,
+  Milestone,
+  Users,
 } from 'lucide-react';
+import { getNodeBackgroundStyle, getDarkerShade } from '../../utils/colorUtils';
 
 interface NodeRendererProps {
   node: DiagramNode;
@@ -64,6 +67,8 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
 }) => {
   const [isEditingLabel, setIsEditingLabel] = React.useState(false);
   const [editedLabel, setEditedLabel] = React.useState(node.label);
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [mouseEntryPos, setMouseEntryPos] = React.useState<{ x: number; y: number } | null>(null);
   const activeCollaborator = collaborators.find(c => c.selectedNodeId === node.id);
 
   // Render anchor handles on hover for wiring connections
@@ -610,25 +615,75 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         );
       }
 
-      // 15. Gantt Task Node
+      // 15. Gantt Task / Milestone Node
       case 'gantt-task': {
-        const progress = node.data?.progress ?? 0;
+        const progress = Math.min(100, Math.max(0, Number(node.data?.progress ?? 0)));
+        const isMilestone = !!node.data?.isMilestone;
+        const status = node.data?.status || (progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'not-started');
+        const fill = node.style?.fill || 'rgba(15, 23, 42, 0.95)';
+        const stroke = node.style?.stroke || (isMilestone ? '#f59e0b' : '#10b981');
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const bgStyle = getNodeBackgroundStyle(fill, node.style?.gradient, 'rgba(15, 23, 42, 0.95)');
+
+        const statusColors: Record<string, { bg: string; text: string; border: string }> = {
+          completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-300', border: 'border-emerald-500/30' },
+          'in-progress': { bg: 'bg-sky-500/20', text: 'text-sky-300', border: 'border-sky-500/30' },
+          blocked: { bg: 'bg-rose-500/20', text: 'text-rose-300', border: 'border-rose-500/30' },
+          'on-hold': { bg: 'bg-amber-500/20', text: 'text-amber-300', border: 'border-amber-500/30' },
+          'not-started': { bg: 'bg-slate-700/30', text: 'text-slate-400', border: 'border-slate-600/30' },
+        };
+        const sColor = statusColors[status] || statusColors['in-progress'];
+
         return (
-          <div className="flex flex-col justify-between h-full bg-slate-900 border-2 border-emerald-500/80 rounded-lg p-2 shadow-xl text-left">
-            <div className="flex items-center justify-between text-[10px]">
-              <span className="text-emerald-400 font-semibold truncate">{node.label}</span>
-              <span className="font-mono text-slate-400">{progress}%</span>
+          <div
+            className="flex flex-col justify-between h-full p-2.5 rounded-lg shadow-xl text-left border-2 transition-all relative overflow-hidden"
+            style={{
+              ...bgStyle,
+              borderColor: stroke,
+              borderWidth: `${strokeWidth}px`,
+            }}
+          >
+            {/* Header: Title and Milestone / Status */}
+            <div className="flex items-start justify-between gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {isMilestone ? (
+                  <Milestone className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                ) : (
+                  <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                )}
+                <span className="font-bold text-xs truncate text-slate-100">
+                  {node.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold uppercase ${sColor.bg} ${sColor.text} ${sColor.border}`}>
+                  {status}
+                </span>
+                <span className="font-mono text-xs font-bold text-emerald-400">
+                  {progress}%
+                </span>
+              </div>
             </div>
-            {/* Progress bar */}
-            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden my-1">
-              <div
-                className="bg-emerald-500 h-full rounded-full transition-all"
-                style={{ width: `${progress}%` }}
-              />
+
+            {/* Progress Track & Bar */}
+            <div className="my-1.5">
+              <div className="w-full bg-slate-950/80 border border-slate-700/60 h-2.5 rounded-full overflow-hidden p-0.5 shadow-inner">
+                <div
+                  className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-300 shadow-sm"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono">
-              <span>{node.data?.startDate || '2026-11-01'}</span>
-              <span>{node.data?.assignee || 'Unassigned'}</span>
+
+            {/* Footer Metadata */}
+            <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono pt-1 border-t border-slate-700/40">
+              <span className="truncate max-w-[110px]">
+                {node.data?.startDate ? `${node.data.startDate}` : 'Start'}
+                {node.data?.endDate ? ` → ${node.data.endDate}` : ''}
+              </span>
+              <span className="text-slate-300 font-medium truncate max-w-[90px] text-right">
+                {node.data?.assignee || 'Unassigned'}
+              </span>
             </div>
           </div>
         );
@@ -753,7 +808,328 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         );
       }
 
-      // 18. Mindmap Node & Standard Flowchart Process Box
+      // 18. UML Actor (Standard Stick Man figure)
+      case 'uml-actor':
+      case 'actor': {
+        const fill = node.style?.fill || '#0284c7';
+        const stroke = node.style?.stroke || '#38bdf8';
+        const strokeWidth = node.style?.strokeWidth ?? 2.5;
+        const textColor = node.style?.textColor || '#ffffff';
+        const w = node.width;
+        const h = node.height;
+
+        // Stick figure geometry calculations
+        const headRadius = Math.max(12, Math.min(w * 0.16, h * 0.13, 18));
+        const headCx = w / 2;
+        const headCy = Math.max(headRadius + 5, h * 0.15);
+
+        const torsoTop = headCy + headRadius;
+        const torsoBottom = headCy + headRadius + Math.max(18, h * 0.28);
+        const armY = torsoTop + (torsoBottom - torsoTop) * 0.35;
+        const armSpan = Math.max(18, Math.min(w * 0.34, 34));
+
+        const legBottom = Math.min(h - 26, torsoBottom + Math.max(20, h * 0.28));
+        const legSpan = Math.max(16, Math.min(w * 0.28, 30));
+        const darkerShade = getDarkerShade(fill, 0.4);
+
+        return (
+          <div className="relative w-full h-full flex flex-col items-center justify-between p-1 overflow-visible">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-md"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              <defs>
+                <linearGradient id={`actor-grad-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={fill} />
+                  <stop offset="100%" stopColor={darkerShade} />
+                </linearGradient>
+              </defs>
+              {/* Head Circle */}
+              <circle
+                cx={headCx}
+                cy={headCy}
+                r={headRadius}
+                fill={node.style?.gradient ? `url(#actor-grad-${node.id})` : fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+              />
+              {/* Torso */}
+              <line
+                x1={headCx}
+                y1={torsoTop}
+                x2={headCx}
+                y2={torsoBottom}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+              />
+              {/* Arms */}
+              <line
+                x1={headCx - armSpan}
+                y1={armY}
+                x2={headCx + armSpan}
+                y2={armY}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+              />
+              {/* Left Leg */}
+              <line
+                x1={headCx}
+                y1={torsoBottom}
+                x2={headCx - legSpan}
+                y2={legBottom}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+              />
+              {/* Right Leg */}
+              <line
+                x1={headCx}
+                y1={torsoBottom}
+                x2={headCx + legSpan}
+                y2={legBottom}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+              />
+            </svg>
+
+            {/* Actor Label & Stereotype */}
+            <div className="mt-auto w-full text-center px-1 z-10 pointer-events-none select-none pb-0.5">
+              {node.data?.actorType && (
+                <div className="text-[9px] font-mono text-cyan-300 opacity-90 truncate">
+                  «{node.data.actorType}»
+                </div>
+              )}
+              <span
+                className="font-bold text-xs leading-tight line-clamp-2"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
+      // 19. UML Use Case (Standard Oval / Ellipse)
+      case 'uml-usecase': {
+        const fill = node.style?.fill || 'rgba(30, 41, 59, 0.95)';
+        const stroke = node.style?.stroke || '#06b6d4';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const w = node.width;
+        const h = node.height;
+        const darkerShade = getDarkerShade(fill, 0.35);
+
+        return (
+          <div className="relative w-full h-full flex items-center justify-center overflow-visible">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-md"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              <defs>
+                <linearGradient id={`usecase-grad-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={fill} />
+                  <stop offset="100%" stopColor={darkerShade} />
+                </linearGradient>
+              </defs>
+              <ellipse
+                cx={w / 2}
+                cy={h / 2}
+                rx={(w - strokeWidth * 2) / 2}
+                ry={(h - strokeWidth * 2) / 2}
+                fill={node.style?.gradient ? `url(#usecase-grad-${node.id})` : fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeDasharray={node.style?.strokeDasharray}
+              />
+            </svg>
+            <div className="relative z-10 text-center px-4 max-w-[85%] flex flex-col items-center justify-center pointer-events-none select-none">
+              {node.data?.extensionPoint && (
+                <span className="text-[9px] font-mono text-cyan-300 opacity-80 mb-0.5">
+                  «extension: {node.data.extensionPoint}»
+                </span>
+              )}
+              <span
+                className="font-semibold text-xs leading-tight line-clamp-3"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
+      // 20. Flowchart Terminator (Stadium / Capsule shape for Start & End)
+      case 'flow-terminator': {
+        const isStart = (node.label || '').toLowerCase().includes('start');
+        const defaultFill = isStart ? 'rgba(5, 150, 105, 0.9)' : 'rgba(225, 29, 72, 0.9)';
+        const defaultStroke = isStart ? '#34d399' : '#fb7185';
+        const fill = node.style?.fill || defaultFill;
+        const stroke = node.style?.stroke || defaultStroke;
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const bgStyle = getNodeBackgroundStyle(fill, node.style?.gradient, defaultFill);
+
+        return (
+          <div
+            className="flex flex-col items-center justify-center h-full px-4 rounded-full shadow-xl text-center transition-all border-2"
+            style={{
+              ...bgStyle,
+              borderColor: stroke,
+              borderWidth: `${strokeWidth}px`,
+              color: textColor,
+            }}
+          >
+            <span className="text-xs font-bold uppercase tracking-wider truncate max-w-[90%]">
+              {node.label}
+            </span>
+          </div>
+        );
+      }
+
+      // 21. Flowchart Data / I-O (Standard Parallelogram)
+      case 'flow-data': {
+        const fill = node.style?.fill || 'rgba(30, 41, 59, 0.95)';
+        const stroke = node.style?.stroke || '#0ea5e9';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const w = node.width;
+        const h = node.height;
+        const pad = Math.max(strokeWidth, 2);
+        const skew = Math.min(w * 0.18, 28);
+        const points = `${skew + pad},${pad} ${w - pad},${pad} ${w - skew - pad},${h - pad} ${pad},${h - pad}`;
+        const darkerShade = getDarkerShade(fill, 0.35);
+
+        return (
+          <div className="relative w-full h-full flex items-center justify-center overflow-visible">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-md"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              <defs>
+                <linearGradient id={`data-grad-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={fill} />
+                  <stop offset="100%" stopColor={darkerShade} />
+                </linearGradient>
+              </defs>
+              <polygon
+                points={points}
+                fill={node.style?.gradient ? `url(#data-grad-${node.id})` : fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeDasharray={node.style?.strokeDasharray}
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div className="relative z-10 text-center px-6 max-w-[80%] flex flex-col items-center justify-center pointer-events-none select-none">
+              {node.data?.ioType && (
+                <span className="text-[9px] font-mono text-cyan-300 uppercase opacity-80 mb-0.5">
+                  [{node.data.ioType}]
+                </span>
+              )}
+              <span
+                className="font-semibold text-xs leading-tight line-clamp-2"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
+      // 22. Flowchart Document (Standard Wavy Bottom Edge)
+      case 'flow-document': {
+        const fill = node.style?.fill || 'rgba(30, 41, 59, 0.95)';
+        const stroke = node.style?.stroke || '#f59e0b';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const w = node.width;
+        const h = node.height;
+        const pad = Math.max(strokeWidth, 2);
+        const waveH = Math.min(16, h * 0.18);
+        const darkerShade = getDarkerShade(fill, 0.35);
+
+        // Path: Top flat, right down, wavy bottom curve, left up
+        const d = `M ${pad} ${pad} 
+                   L ${w - pad} ${pad} 
+                   L ${w - pad} ${h - waveH} 
+                   C ${w * 0.75} ${h + waveH * 0.5}, ${w * 0.5} ${h - waveH * 1.5}, ${pad} ${h - waveH} 
+                   Z`;
+
+        return (
+          <div className="relative w-full h-full flex items-center justify-center overflow-visible">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible pointer-events-none drop-shadow-md"
+              viewBox={`0 0 ${w} ${h}`}
+            >
+              <defs>
+                <linearGradient id={`doc-grad-${node.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={fill} />
+                  <stop offset="100%" stopColor={darkerShade} />
+                </linearGradient>
+              </defs>
+              <path
+                d={d}
+                fill={node.style?.gradient ? `url(#doc-grad-${node.id})` : fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
+                strokeLinejoin="round"
+              />
+            </svg>
+            <div className="relative z-10 text-center px-4 max-w-[85%] pb-2 flex flex-col items-center justify-center pointer-events-none select-none">
+              <span
+                className="font-semibold text-xs leading-tight line-clamp-2"
+                style={{ color: textColor }}
+              >
+                {node.label}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
+      // 23. C4 Architecture Person
+      case 'c4-person': {
+        const fill = node.style?.fill || '#08427b';
+        const stroke = node.style?.stroke || '#5599ff';
+        const strokeWidth = node.style?.strokeWidth ?? 2;
+        const textColor = node.style?.textColor || '#ffffff';
+        const bgStyle = getNodeBackgroundStyle(fill, node.style?.gradient, '#08427b');
+
+        return (
+          <div
+            className="flex flex-col justify-between h-full p-2.5 rounded-2xl shadow-xl text-center border-2 transition-all overflow-hidden"
+            style={{
+              ...bgStyle,
+              borderColor: stroke,
+              borderWidth: `${strokeWidth}px`,
+              color: textColor,
+            }}
+          >
+            <div className="flex items-center justify-center gap-1.5 pt-0.5">
+              <div className="w-5 h-5 rounded-full bg-blue-500/30 flex items-center justify-center border border-blue-400/50">
+                <Users className="w-3 h-3 text-blue-200" />
+              </div>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-blue-200 font-semibold">
+                [Person]
+              </span>
+            </div>
+            <div className="font-bold text-xs leading-snug px-1 my-1">
+              {node.label}
+            </div>
+            <div className="text-[10px] text-blue-200/80 font-sans border-t border-blue-400/30 pt-1 line-clamp-2">
+              {node.data?.description || node.data?.role || 'User / Actor'}
+            </div>
+          </div>
+        );
+      }
+
+      // 24. Mindmap Node & Standard Flowchart Process Box
       case 'mindmap-node':
       case 'flow-process':
       case 'vsm-step':
@@ -766,12 +1142,13 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         const strokeWidth = node.style?.strokeWidth ?? 2;
         const textColor = node.style?.textColor || '#ffffff';
         const rounded = node.style?.rounded !== undefined ? `${node.style.rounded}px` : (isMindmap ? '9999px' : '8px');
+        const bgStyle = getNodeBackgroundStyle(fill, node.style?.gradient, defaultFill);
 
         return (
           <div
-            className="flex flex-col items-center justify-center h-full p-2.5 shadow-xl text-center transition-colors"
+            className="flex flex-col items-center justify-center h-full p-2.5 shadow-xl text-center transition-all border-2"
             style={{
-              backgroundColor: fill,
+              ...bgStyle,
               borderColor: stroke,
               borderWidth: `${strokeWidth}px`,
               borderStyle: node.style?.strokeDasharray ? 'dashed' : 'solid',
@@ -791,19 +1168,20 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         );
       }
 
-      // Default Node Renderer (Honors all custom colors, fill, stroke, and rounded attributes)
+      // Default Node Renderer (Honors all custom colors, fill, stroke, gradient, and rounded attributes)
       default: {
         const fill = node.style?.fill || 'rgba(30, 41, 59, 0.95)';
         const stroke = node.style?.stroke || '#3b82f6';
         const strokeWidth = node.style?.strokeWidth ?? 2;
         const textColor = node.style?.textColor || '#ffffff';
         const rounded = node.style?.rounded !== undefined ? `${node.style.rounded}px` : '8px';
+        const bgStyle = getNodeBackgroundStyle(fill, node.style?.gradient, 'rgba(30, 41, 59, 0.95)');
 
         return (
           <div
-            className="flex items-center justify-center h-full p-2.5 shadow-xl text-center transition-colors"
+            className="flex items-center justify-center h-full p-2.5 shadow-xl text-center transition-all border-2"
             style={{
-              backgroundColor: fill,
+              ...bgStyle,
               borderColor: stroke,
               borderWidth: `${strokeWidth}px`,
               borderStyle: node.style?.strokeDasharray ? 'dashed' : 'solid',
@@ -840,6 +1218,18 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       className={`absolute group select-none transition-shadow pointer-events-auto ${
         isSelected ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-950 z-20' : 'z-10'
       } ${isDragging ? 'cursor-grabbing opacity-90' : 'cursor-grab'}`}
+      onMouseEnter={e => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMouseEntryPos({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+        setIsHovered(true);
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setMouseEntryPos(null);
+      }}
       onMouseDown={e => {
         if (
           (e.target as HTMLElement).closest('button') ||
@@ -874,7 +1264,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       {/* Render Node Body */}
       {renderNodeBody()}
 
-      {/* Child Diagram / Sub-Diagram Navigation Badge (Change 4: Available on EVERY node) */}
+      {/* Child Diagram / Sub-Diagram Navigation Badge (Available on EVERY node) */}
       {node.childDiagramFilename ? (
         <button
           type="button"
@@ -907,9 +1297,16 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
         </button>
       ) : null}
 
-      {/* Hover Description Tooltip */}
-      {(node.documentation?.description || (node.stickyNotes && node.stickyNotes.length > 0)) && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col w-64 p-2.5 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-200 pointer-events-none z-50 backdrop-blur-md animate-in fade-in zoom-in-95">
+      {/* Human-Friendly Mouse-Entry Anchored Hover Description Tooltip */}
+      {isHovered && mouseEntryPos && (node.documentation?.description || (node.stickyNotes && node.stickyNotes.length > 0)) && (
+        <div
+          className="absolute z-50 flex flex-col w-64 p-2.5 bg-slate-900/95 border border-slate-700/80 rounded-xl shadow-2xl text-[11px] text-slate-200 pointer-events-none backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+          style={{
+            left: `${Math.min(Math.max(mouseEntryPos.x, 24), Math.max(node.width - 24, 24))}px`,
+            top: `${mouseEntryPos.y}px`,
+            transform: 'translate(-50%, -100%) translateY(14px)',
+          }}
+        >
           <div className="flex items-center justify-between font-mono text-[9px] text-sky-400 border-b border-slate-800 pb-1 mb-1">
             <span className="font-bold truncate">{node.label}</span>
             <span className="uppercase px-1 py-0.2 bg-slate-800 rounded text-slate-400">{node.type}</span>
@@ -933,6 +1330,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
               <span>★ {node.stickyNotes.length} sticky note{node.stickyNotes.length === 1 ? '' : 's'}</span>
             </div>
           )}
+          {/* Subtle pointer tip directed at entry point */}
           <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px] border-4 border-transparent border-t-slate-700" />
         </div>
       )}
